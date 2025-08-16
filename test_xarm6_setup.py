@@ -118,7 +118,8 @@ def test_data_conversion():
         print(f"✓ Sample data creation successful")
         print(f"  - Created {len(sample_data)} episodes")
         print(f"  - First episode state shape: {sample_data[0]['state'].shape}")
-        print(f"  - First episode image shape: {sample_data[0]['image'].shape}")
+        print(f"  - First episode base_rgb shape: {sample_data[0]['base_rgb'].shape}")
+        print(f"  - First episode wrist_rgb shape: {sample_data[0]['wrist_rgb'].shape}")
         
         return True
         

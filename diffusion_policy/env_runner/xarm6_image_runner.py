@@ -20,9 +20,19 @@ class XArm6ImageRunner(BaseImageRunner):
                  past_action,
                  n_envs,
                  **kwargs):
-        super().__init__(output_dir, n_train, n_train_vis, train_start_seed,
-                        n_test, n_test_vis, max_steps, n_obs_steps, n_action_steps,
-                        fps, past_action, n_envs, **kwargs)
+        # Store parameters for testing
+        self.output_dir = output_dir
+        self.n_train = n_train
+        self.n_train_vis = n_train_vis
+        self.train_start_seed = train_start_seed
+        self.n_test = n_test
+        self.n_test_vis = n_test_vis
+        self.max_steps = max_steps
+        self.n_obs_steps = n_obs_steps
+        self.n_action_steps = n_action_steps
+        self.fps = fps
+        self.past_action = past_action
+        self.n_envs = n_envs
         
         # Initialize your xArm6 environment here
         # self.env = XArm6Env()  # You'll need to create this or import from your openpi repo
@@ -133,8 +143,8 @@ def test():
     # Test observation
     obs = runner._get_obs()
     print(f"Observation keys: {obs.keys()}")
-    print(f"Image shape: {obs['image'].shape}")
-    print(f"Wrist image shape: {obs['wrist_image'].shape}")
+    print(f"Base RGB shape: {obs['base_rgb'].shape}")
+    print(f"Wrist RGB shape: {obs['wrist_rgb'].shape}")
     print(f"State shape: {obs['state'].shape}")
     
     # Test step
