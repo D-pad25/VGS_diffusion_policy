@@ -1,0 +1,38 @@
+name: xarm6_image
+
+image_shape: &image_shape [6, 224, 224]  # 3 base + 3 wrist (downsampled from 480x640)
+shape_meta: &shape_meta
+  obs:
+    image:
+      shape: *image_shape
+      type: rgb
+    state:
+      shape: [7]
+      type: low_dim
+  action:
+    shape: [7]
+
+env_runner:
+  _target_: diffusion_policy.env_runner.xarm6_image_runner.XArm6ImageRunner
+  n_train: 6
+  n_train_vis: 2
+  train_start_seed: 0
+  n_test: 50
+  n_test_vis: 4
+  max_steps: 300
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  fps: 10
+  past_action: ${past_action_visible}
+  n_envs: null
+
+dataset:
+  _target_: diffusion_policy.dataset.xarm6_image_dataset.XArm6ImageDataset
+  zarr_path: data/xarm6/xarm6_replay.zarr  # Update this path to your actual data location
+  max_train_episodes: null  # Set based on your data size
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  seed: 42
+  val_ratio: 0.02
+  max_train_episodes: null  # Set based on your data size 
