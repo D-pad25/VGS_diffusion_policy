@@ -187,11 +187,18 @@ def convert_episode(ep_pkls: List[Path], app: ZarrAppender, out_h: int, out_w: i
 # ------------------- CLI -------------------
 
 def main():
+    # ---- Default values (edit here so you don’t need CLI each time) ----
+    default_input_root = Path("/home/d_pad25/Thesis/Data/diffusion_test/test_data")
+    default_out_path   = Path("/home/d_pad25/Thesis/Data/diffusion_test/test_output")
+    default_resize     = [224, 224]
+    default_include_action = True
+
+    # ---- CLI parser ----
     ap = argparse.ArgumentParser(description="Minimal converter to ReplayBuffer Zarr with base_rgb, wrist_rgb, robot_state(7).")
-    ap.add_argument("--input_root", type=Path, required=True, help="Folder of episode subfolders containing .pkl files.")
-    ap.add_argument("--out_path", type=Path, required=True, help="Output Zarr directory path.")
-    ap.add_argument("--resize", nargs=2, type=int, default=[224, 224], metavar=("H", "W"), help="Target image size.")
-    ap.add_argument("--include-action", type=str, default="false", help="Whether to write 'action' from 'control' (true/false).")
+    ap.add_argument("--input_root", type=Path, default=default_input_root, help="Folder of episode subfolders containing .pkl files.")
+    ap.add_argument("--out_path", type=Path, default=default_out_path, help="Output Zarr directory path.")
+    ap.add_argument("--resize", nargs=2, type=int, default=default_resize, metavar=("H", "W"), help="Target image size (letterboxed).")
+    ap.add_argument("--include-action", type=str, default=str(default_include_action).lower(), help="Whether to write 'action' from 'actions' (true/false).")
     args = ap.parse_args()
 
     input_root: Path = args.input_root
