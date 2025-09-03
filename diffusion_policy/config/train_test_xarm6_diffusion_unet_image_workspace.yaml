@@ -101,7 +101,7 @@ training:
   use_ema: False            # ✅ skip EMA for a quick test
   freeze_encoder: False
   # training loop control
-  rollout_every: 1          # ✅ lower so you see rollouts during test
+  rollout_every: null          # ✅ lower so you see rollouts during test
   checkpoint_every: 1       # ✅ save every epoch for debugging
   val_every: 1
   sample_every: 1
