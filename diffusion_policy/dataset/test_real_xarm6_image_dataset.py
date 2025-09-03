@@ -27,7 +27,7 @@ from omegaconf import OmegaConf
 
 def _compose_cfg(workspace_name: str, dataset_path_override: Optional[str]):
     # Point Hydra at repo's config directory
-    repo_root = Path(__file__).resolve().parents[2]   # VGS_diffusion_policy/
+    repo_root = Path(__file__).resolve().parents[1]   # diffusion_policy/
     config_dir = (repo_root / "config").as_posix()
     OmegaConf.register_new_resolver("eval", eval, replace=True)
 
