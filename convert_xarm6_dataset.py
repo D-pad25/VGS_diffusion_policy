@@ -47,15 +47,6 @@ register_codecs()
 
 
 # ------------------------ Defaults ------------------------
-DEFAULT_SHAPE_META: Dict[str, Any] = {
-    "obs": {
-        "base_rgb":   {"shape": [3, 224, 224], "type": "rgb"},
-        "wrist_rgb":  {"shape": [3, 224, 224], "type": "rgb"},
-        "robot_state":{"shape": [7],           "type": "low_dim"}
-    },
-    "action": {"shape": [7]}
-}
-DEFAULT_IMAGE_KEYS = ["wrist_rgb", "base_rgb"]
 
 
 # ------------------------ Helpers ------------------------
