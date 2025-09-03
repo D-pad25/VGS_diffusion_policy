@@ -219,6 +219,7 @@ def main():
     task_cfg = _try_load_task_yaml()
     dataset_root = _detect_dataset_root(task_cfg)
     shape_meta, camera_res = _detect_shape_meta_and_res(task_cfg)
+    shape_meta = OmegaConf.to_container(shape_meta)
     image_keys = [k for k, v in shape_meta["obs"].items() if v.get("type") == "rgb"]
     # default: write Hydra-compatible cache under dataset_root
     if args.out_path is None:
