@@ -6,20 +6,21 @@ from diffusion_policy.policy.base_image_policy import BaseImagePolicy
 from diffusion_policy.common.pytorch_util import dict_apply
 
 class XArm6ImageRunner(BaseImageRunner):
-    def __init__(self, 
+    def __init__(self,
                  output_dir,
-                 n_train,
-                 n_train_vis,
-                 train_start_seed,
-                 n_test,
-                 n_test_vis,
-                 max_steps,
-                 n_obs_steps,
-                 n_action_steps,
-                 fps,
-                 past_action,
-                 n_envs,
+                 n_train=10,
+                 n_train_vis=3,
+                 train_start_seed=0,
+                 n_test=22,
+                 n_test_vis=6,
+                 max_steps=400,
+                 n_obs_steps=2,
+                 n_action_steps=8,
+                 fps=30,
+                 past_action=False,
+                 n_envs=1,
                  **kwargs):
+        super().__init__(output_dir, **kwargs)
         # Store parameters for testing
         self.output_dir = output_dir
         self.n_train = n_train
