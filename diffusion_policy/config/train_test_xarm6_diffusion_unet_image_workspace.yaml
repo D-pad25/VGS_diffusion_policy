@@ -89,7 +89,8 @@ optimizer:
   weight_decay: 1.0e-6
 
 training:
-  device: "cuda:0"          # ✅ use GPU if you have one, else "cpu"
+  # device: "cuda:0"        # ✅ use GPU if you have one, else "cpu"
+  device: "cpu"             # ✅ use GPU if you have one, else "cpu"
   seed: 42
   debug: True               # ✅ better for short runs, gives more logs/asserts
   resume: False             # ✅ don’t resume checkpoints for sanity test
