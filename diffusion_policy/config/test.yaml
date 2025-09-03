@@ -1,13 +1,14 @@
+# config/train_xarm6_diffusion_unet_image_pretrained_workspace.yaml
 defaults:
   - _self_
   - task: real_xarm_image
 
-name: train_xarm6_diffusion_unet_image
+name: train_xarm6_diffusion_unet_image_pretrained
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
 
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
-exp_name: "xarm6_default"
+exp_name: "xarm6_pretrained_resnet18"
 
 horizon: 16
 n_obs_steps: 2
@@ -20,9 +21,8 @@ obs_as_global_cond: True
 
 policy:
   _target_: diffusion_policy.policy.diffusion_unet_image_policy.DiffusionUnetImagePolicy
-
   shape_meta: ${shape_meta}
-  
+
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
     num_train_timesteps: 100
@@ -39,12 +39,12 @@ policy:
     rgb_model:
       _target_: diffusion_policy.model.vision.model_getter.get_resnet
       name: resnet18
-      weights: null
-    resize_shape: null
-    crop_shape: [224, 224]  # Match your downsampled image size
-    random_crop: True
-    use_group_norm: True
-    share_rgb_model: False
+      weights: IMAGENET1K_V1     # pretrained
+    resize_shape: null            # images are already 224x224 from your converter
+    crop_shape: [224, 224]
+    random_crop: False
+    use_group_norm: False         # keep BN to match pretrained weights
+    share_rgb_model: True         # share backbone for wrist/base
     imagenet_norm: True
 
   horizon: ${horizon}
@@ -67,14 +67,14 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 32  # Back to 32 since we're using 224x224 images
+  batch_size: 32
   num_workers: 4
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 32  # Back to 32 since we're using 224x224 images
+  batch_size: 32
   num_workers: 4
   shuffle: False
   pin_memory: True
@@ -92,31 +92,24 @@ training:
   seed: 42
   debug: False
   resume: True
-  # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 8000
+  num_epochs: 600
   gradient_accumulate_every: 1
-  # EMA destroys performance when used with BatchNorm
-  # replace BatchNorm with GroupNorm.
   use_ema: True
-  freeze_encoder: False
-  # training loop control
-  # in epochs
+  freeze_encoder: True           # freeze pretrained conv backbone
   rollout_every: 50
   checkpoint_every: 50
   val_every: 1
   sample_every: 5
-  # steps per epoch
   max_train_steps: null
   max_val_steps: null
-  # misc
   tqdm_interval_sec: 1.0
 
 logging:
   project: xarm6_diffusion_policy
-  resume: True
-  mode: online
+  resume: False
+  mode: disabled                 # set to "online" if using wandb
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
   id: null
@@ -124,10 +117,10 @@ logging:
 
 checkpoint:
   topk:
-    monitor_key: val_loss
+    monitor_key: val_loss        # monitor validation loss (real data)
     mode: min
     k: 5
-    format_str: 'epoch={epoch:04d}-val_loss={val_loss:.3f}.ckpt'
+    format_str: 'epoch={epoch:04d}-val_loss={val_loss:.4f}.ckpt'
   save_last_ckpt: True
   save_last_snapshot: False
 
@@ -142,4 +135,4 @@ hydra:
     dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
   sweep:
     dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
-    subdir: ${hydra.job.num} 
+    subdir: ${hydra.job.num}

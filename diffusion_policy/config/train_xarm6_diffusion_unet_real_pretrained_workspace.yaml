@@ -2,12 +2,12 @@ defaults:
   - _self_
   - task: real_xarm_image
 
-name: train_xarm6_diffusion_unet_image
+name: train_xarm6_diffusion_unet_image_pretrained
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
 
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
-exp_name: "xarm6_default"
+exp_name: "xarm6_pretrained_resnet18"
 
 horizon: 16
 n_obs_steps: 2
@@ -24,14 +24,17 @@ policy:
   shape_meta: ${shape_meta}
   
   noise_scheduler:
-    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+    _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler
     num_train_timesteps: 100
     beta_start: 0.0001
     beta_end: 0.02
+    # beta_schedule is important
+    # this is the best we found
     beta_schedule: squaredcos_cap_v2
-    variance_type: fixed_small
     clip_sample: True
-    prediction_type: epsilon
+    set_alpha_to_one: True
+    steps_offset: 0
+    prediction_type: epsilon # or sample
 
   obs_encoder:
     _target_: diffusion_policy.model.vision.multi_image_obs_encoder.MultiImageObsEncoder
@@ -39,12 +42,12 @@ policy:
     rgb_model:
       _target_: diffusion_policy.model.vision.model_getter.get_resnet
       name: resnet18
-      weights: null
+      weights: IMAGENET1K_V1 # or r3m
     resize_shape: null
-    crop_shape: [224, 224]  # Match your downsampled image size
-    random_crop: True
-    use_group_norm: True
-    share_rgb_model: False
+    crop_shape: [224, 224]
+    random_crop: False
+    use_group_norm: False
+    share_rgb_model: True
     imagenet_norm: True
 
   horizon: ${horizon}
@@ -52,11 +55,15 @@ policy:
   n_obs_steps: ${n_obs_steps}
   num_inference_steps: 100
   obs_as_global_cond: ${obs_as_global_cond}
+  # crop_shape: null
   diffusion_step_embed_dim: 128
   down_dims: [512, 1024, 2048]
   kernel_size: 5
   n_groups: 8
   cond_predict_scale: True
+
+  # scheduler.step params
+  # predict_epsilon: True
 
 ema:
   _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
@@ -67,18 +74,18 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 32  # Back to 32 since we're using 224x224 images
+  batch_size: 32
   num_workers: 4
   shuffle: True
   pin_memory: True
-  persistent_workers: False
+  persistent_workers: True
 
 val_dataloader:
-  batch_size: 32  # Back to 32 since we're using 224x224 images
+  batch_size: 32
   num_workers: 4
   shuffle: False
   pin_memory: True
-  persistent_workers: False
+  persistent_workers: True
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -95,12 +102,12 @@ training:
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 8000
+  num_epochs: 600
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.
   use_ema: True
-  freeze_encoder: False
+  freeze_encoder: True
   # training loop control
   # in epochs
   rollout_every: 50
@@ -124,10 +131,10 @@ logging:
 
 checkpoint:
   topk:
-    monitor_key: val_loss
+    monitor_key: train_loss
     mode: min
     k: 5
-    format_str: 'epoch={epoch:04d}-val_loss={val_loss:.3f}.ckpt'
+    format_str: 'epoch={epoch:04d}-train_loss={train_loss:.3f}.ckpt'
   save_last_ckpt: True
   save_last_snapshot: False
 
@@ -142,4 +149,4 @@ hydra:
     dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
   sweep:
     dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
-    subdir: ${hydra.job.num} 
+    subdir: ${hydra.job.num}

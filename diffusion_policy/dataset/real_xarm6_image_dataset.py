@@ -144,8 +144,8 @@ class RealXArm6ImageDataset(BaseImageDataset):
         if use_cache:
             # fingerprint shape_meta + camera_res (so cache refreshes if res changes)
             fp = {
-                # "shape_meta": OmegaConf.to_container(shape_meta),
-                "shape_meta": shape_meta,
+                "shape_meta": OmegaConf.to_container(shape_meta),
+                # "shape_meta": shape_meta,
                 "camera_res": camera_res
             }
             shape_meta_json = json.dumps(fp, sort_keys=True)
