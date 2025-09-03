@@ -63,34 +63,101 @@ def _repo_root() -> Path:
     # tools/convert_xarm6_dataset.py → repo root = parents[1]
     return Path(__file__).resolve().parents[1]
 
+def _find_task_yaml_path() -> Optional[Path]:
+    """
+    Find diffusion_policy/config/task/real_xarm_image.yaml by walking up from this file,
+    then try CWD as a fallback. Returns the first match or None.
+    """
+    here = Path(__file__).resolve().parent
+    candidates = []
+    for d in [here, *here.parents]:
+        candidates.append(d / "diffusion_policy" / "config" / "task" / "real_xarm_image.yaml")
+    candidates.append(Path.cwd() / "diffusion_policy" / "config" / "task" / "real_xarm_image.yaml")
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
 
 def _try_load_task_yaml() -> Optional[Dict[str, Any]]:
-    """Try to read diffusion_policy/config/task/real_xarm_image.yaml."""
+    """
+    Load dataset_path (and optionally shape_meta) from real_xarm_image.yaml
+    WITHOUT resolving interpolations (to avoid ${...} errors).
+    """
     try:
-        cfg_path = _repo_root() / "diffusion_policy" / "config" / "task" / "real_xarm_image.yaml"
-        if OmegaConf is None or not cfg_path.exists():
+        cfg_path = _find_task_yaml_path()
+        if cfg_path is None:
             return None
+
+        if OmegaConf is None:
+            # Minimal fallback: parse dataset_path by scanning the file
+            # (keeps things working even if OmegaConf isn't available).
+            text = cfg_path.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                if line.strip().startswith("dataset_path:"):
+                    ds = line.split("dataset_path:", 1)[1].strip()
+                    return {"dataset_path": ds, "shape_meta": None}
+            return None
+
         cfg = OmegaConf.load(cfg_path.as_posix())
+        dataset_path = cfg.get("dataset_path")
+        # DO NOT resolve shape_meta (may contain ${...} that require full Hydra composition)
+        shape_meta = None
+        if "shape_meta" in cfg:
+            shape_meta = OmegaConf.to_container(cfg.get("shape_meta"), resolve=False)
+
+        # Basic sanity: dataset_path must exist
+        if not dataset_path:
+            return None
+
+        print(f"[converter] Loaded YAML: {cfg_path}")
+        print(f"[converter] YAML dataset_path: {dataset_path}")
         return {
-            "dataset_path": str(cfg.get("dataset_path", "")),
-            "shape_meta": OmegaConf.to_container(cfg.get("shape_meta"), resolve=True)
-                           if "shape_meta" in cfg else None
+            "dataset_path": str(dataset_path),
+            "shape_meta": shape_meta
         }
     except Exception:
+        # Last-resort: treat as not found
         return None
-
-
-def _find_episode_root(start: Path) -> Optional[Path]:
+def _try_load_task_yaml() -> Optional[Dict[str, Any]]:
     """
-    Return start if it looks like a dataset root:
-    i.e. it has one or more subdirectories, each containing step*.pkl files.
+    Load dataset_path (and optionally shape_meta) from real_xarm_image.yaml
+    WITHOUT resolving interpolations (to avoid ${...} errors).
     """
-    if not start.exists():
+    try:
+        cfg_path = _find_task_yaml_path()
+        if cfg_path is None:
+            return None
+
+        if OmegaConf is None:
+            # Minimal fallback: parse dataset_path by scanning the file
+            # (keeps things working even if OmegaConf isn't available).
+            text = cfg_path.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                if line.strip().startswith("dataset_path:"):
+                    ds = line.split("dataset_path:", 1)[1].strip()
+                    return {"dataset_path": ds, "shape_meta": None}
+            return None
+
+        cfg = OmegaConf.load(cfg_path.as_posix())
+        dataset_path = cfg.get("dataset_path")
+        # DO NOT resolve shape_meta (may contain ${...} that require full Hydra composition)
+        shape_meta = None
+        if "shape_meta" in cfg:
+            shape_meta = OmegaConf.to_container(cfg.get("shape_meta"), resolve=False)
+
+        # Basic sanity: dataset_path must exist
+        if not dataset_path:
+            return None
+
+        print(f"[converter] Loaded YAML: {cfg_path}")
+        print(f"[converter] YAML dataset_path: {dataset_path}")
+        return {
+            "dataset_path": str(dataset_path),
+            "shape_meta": shape_meta
+        }
+    except Exception:
+        # Last-resort: treat as not found
         return None
-    for sub in sorted(start.iterdir()):
-        if sub.is_dir() and any(sub.glob("step*.pkl")):
-            return start
-    return None
 
 
 def _detect_dataset_root() -> Path:
