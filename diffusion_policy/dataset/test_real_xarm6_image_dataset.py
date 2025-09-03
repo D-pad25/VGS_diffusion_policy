@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 import hydra
 from omegaconf import OmegaConf
 
-def _compose_cfg(workspace_name: str, dataset_path_override: str | None):
+def _compose_cfg(workspace_name: str, dataset_path_override: Optional[str]):
     # Point Hydra at the repo's config/ directory robustly
     config_dir = (Path(__file__).resolve().parents[2] / "config").as_posix()
     OmegaConf.register_new_resolver("eval", eval, replace=True)
