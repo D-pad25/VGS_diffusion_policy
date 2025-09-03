@@ -435,3 +435,13 @@ This repository is released under the MIT license. See [LICENSE](LICENSE) for ad
 * The [Block Pushing](./diffusion_policy/env/block_pushing) task is adapted from [BET](https://github.com/notmahi/bet) and [IBC](https://github.com/google-research/ibc).
 * The [Kitchen](./diffusion_policy/env/kitchen) task is adapted from [BET](https://github.com/notmahi/bet) and [Relay Policy Learning](https://github.com/google-research/relay-policy-learning).
 * Our [shared_memory](./diffusion_policy/shared_memory) data structures are heavily inspired by [shared-ndarray2](https://gitlab.com/osu-nrsg/shared-ndarray2).
+
+
+
+To test the data conversion, run:
+```bash
+XARM6_WORKSPACE=train_xarm6_diffusion_unet_real_pretrained_workspace \
+XARM6_DATASET_PATH=/home/d_pad25/Thesis/Data/diffusion_test/test_data \
+python -m diffusion_policy.dataset.test_real_xarm6_image_dataset
+
+```
