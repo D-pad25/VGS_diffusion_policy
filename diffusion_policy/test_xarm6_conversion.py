@@ -8,6 +8,13 @@ from pathlib import Path
 # Import your conversion function
 from diffusion_policy.real_world.real_xarm6_data_conversion import real_data_to_replay_buffer   # <- replace with actual filename/module
 
+def print_group(name, group):
+    for k, arr in group.items():
+        if isinstance(arr, zarr.Array):
+            print(f"{name}/{k:15s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
+        elif isinstance(arr, zarr.Group):
+            print_group(f"{name}/{k}", arr)
+            
 def main():
     ap = argparse.ArgumentParser(description="Test the real_data_to_replay_buffer conversion.")
     ap.add_argument("--input_root", type=Path, required=True,
@@ -35,12 +42,7 @@ def main():
     # --- Inspect contents ---
     g = zarr.open(store, mode='r')
     print("\n=== Stored arrays ===")
-    for group_name in ["data", "meta"]:
-        if group_name in g:
-            group = g[group_name]
-            print(f"\nGroup: {group_name}")
-            for k, arr in group.items():
-                print(f" {k:15s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
+    print_group("", g)
 
 
     # --- Integrity checks ---
