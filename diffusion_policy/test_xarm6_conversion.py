@@ -8,17 +8,12 @@ from pathlib import Path
 # Import your conversion function
 from diffusion_policy.real_world.real_xarm6_data_conversion import real_data_to_replay_buffer   # <- replace with actual filename/module
 
-def print_group(name, node):
-    # Array: has .shape/.dtype/.chunks
-    if hasattr(node, "shape") and hasattr(node, "dtype") and hasattr(node, "chunks"):
-        print(f"{name:30s} shape={node.shape} dtype={node.dtype} chunks={node.chunks}")
-        return
-    # Group: has .items() to walk children
-    if hasattr(node, "items"):
-        for k, v in node.items():
-            print_group(f"{name}/{k}" if name else k, v)
-
-
+def print_group(name, group):
+    for k, arr in group.items():
+        if isinstance(arr, zarr.Array):
+            print(f"{name}/{k:15s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
+        elif isinstance(arr, zarr.Group):
+            print_group(f"{name}/{k}", arr)
             
 def main():
     ap = argparse.ArgumentParser(description="Test the real_data_to_replay_buffer conversion.")
@@ -44,44 +39,49 @@ def main():
     )
     print("✅ Conversion complete.")
 
-        # --- Inspect contents ---
+    # --- Inspect contents ---
     g = zarr.open(store, mode='r')
     print("\n=== Stored arrays ===")
-    for path, arr in zarr.open(store, mode='r').arrays():
-        print(f"/{path:25s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
+    for group_name in ["data", "meta"]:
+        if group_name in g:
+            group = g[group_name]
+            print(f"\nGroup: {group_name}")
+            print(f"\nGroup: {group_name}")
+            print_group(group_name, group)
+
+
     # --- Integrity checks ---
-    T = g["data"]["robot_state"].shape[0]
-    E = g["meta"]["episode_ends"].shape[0]
+    T = g["robot_state"].shape[0]
+    E = g["episode_ends"].shape[0]
     print(f"\nTotal steps (T): {T}, Episodes (E): {E}")
 
     # episode_lengths vs episode_ends consistency
-    ep_lengths = g["meta"]["episode_lengths"][:]
-    ep_ends = g["meta"]["episode_ends"][:]
+    ep_lengths = g["episode_lengths"][:]
+    ep_ends = g["episode_ends"][:]
     assert np.all(ep_ends == np.cumsum(ep_lengths)), "episode_ends != cumsum(episode_lengths)"
     assert ep_ends[-1] == T, "Final episode_end != total steps"
     print("✅ Episode metadata consistent.")
 
     # low-dim checks
-    assert g["data"]["robot_state"].shape == (T, 7)
-    assert g["data"]["action"].shape == (T, 7)
+    assert g["robot_state"].shape == (T, 7)
+    assert g["action"].shape == (T, 7)
     print("✅ robot_state and action have shape (T,7).")
 
     # sample values
     i = 0
-    rs = g["data"]["robot_state"][i]
-    act = g["data"]["action"][i]
+    rs = g["robot_state"][i]
+    act = g["action"][i]
     print(f"\nSample step {i}:")
     print(" robot_state:", rs)
     print(" action     :", act)
-    print(" timestamp  :", g["data"]["timestamp"][i])
+    print(" timestamp  :", g['timestamp'][i])
 
     # optional preview
     if args.preview:
         for cam in ["wrist_rgb", "base_rgb"]:
-            if cam in g["data"]:
-                img = g["data"][cam][i]   # (H,W,3) uint8
+            if cam in g:
+                img = g[cam][i]   # (H,W,3) uint8
                 cv2.imshow(cam, img[..., ::-1])  # BGR for OpenCV
-
         print("Press any key in the OpenCV window(s) to close...")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
