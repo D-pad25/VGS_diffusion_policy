@@ -124,6 +124,7 @@ class RealXArm6ImageDataset(BaseImageDataset):
         self,
         shape_meta: dict,
         dataset_path: str,
+        out_dir: Optional[str] = None,   # NEW
         horizon: int = 16,
         pad_before: int = 0,
         pad_after: int = 0,
@@ -150,7 +151,9 @@ class RealXArm6ImageDataset(BaseImageDataset):
             }
             shape_meta_json = json.dumps(fp, sort_keys=True)
             shape_meta_hash = hashlib.md5(shape_meta_json.encode("utf-8")).hexdigest()
-            cache_zarr_path = os.path.join(dataset_path, f"{shape_meta_hash}.zarr.zip")
+            # use out_dir if provided, else default to dataset_path
+            target_dir = out_dir if out_dir is not None else dataset_path
+            cache_zarr_path = os.path.join(target_dir, f"{shape_meta_hash}.zarr.zip")
             cache_lock_path = cache_zarr_path + ".lock"
 
             print(f"[RealXArm6ImageDataset] Acquiring cache lock: {cache_lock_path}")
