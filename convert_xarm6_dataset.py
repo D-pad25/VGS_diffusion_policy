@@ -150,8 +150,9 @@ def _detect_shape_meta_and_res() -> Tuple[Dict[str, Any], Tuple[int, int]]:
         shape_meta = task_cfg["shape_meta"]
 
     if shape_meta is None:
-        print("[converter] Using built-in DEFAULT_SHAPE_META.")
-        shape_meta = DEFAULT_SHAPE_META
+        raise FileNotFoundError(
+        "Could not find shape_meta in real_xarm_image.yaml"
+        )
 
     # infer (W,H) from any rgb obs
     cam_res = (224, 224)
@@ -219,7 +220,7 @@ def main():
 
     dataset_root = _detect_dataset_root()
     shape_meta, camera_res = _detect_shape_meta_and_res()
-
+    image_keys = [k for k, v in shape_meta["obs"].items() if v.get("type") == "rgb"]
     # default: write Hydra-compatible cache under dataset_root
     if args.out_path is None:
         out_zip = dataset_root / _md5_cache_name(shape_meta, camera_res)
@@ -238,7 +239,7 @@ def main():
         with zarr.ZipStore(str(out_zip), mode="r") as zs:
             _integrity_checks(zs)
         return
-
+    
     print("▶️ Converting raw episodes → ReplayBuffer (in-memory)…")
     mem_store = zarr.MemoryStore()
     rb: ReplayBuffer = real_data_to_replay_buffer(
@@ -246,7 +247,7 @@ def main():
         out_store=mem_store,
         out_resolutions=camera_res,                 # (W,H)
         lowdim_keys=['robot_state','action','timestamp','episode_ends','episode_lengths'],
-        image_keys=DEFAULT_IMAGE_KEYS,
+        image_keys=image_keys,
         # sensible defaults; your function already has progress bars
         n_encoding_threads=os.cpu_count(),
         max_inflight_tasks=os.cpu_count()*5,
