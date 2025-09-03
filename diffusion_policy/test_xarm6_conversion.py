@@ -8,12 +8,16 @@ from pathlib import Path
 # Import your conversion function
 from diffusion_policy.real_world.real_xarm6_data_conversion import real_data_to_replay_buffer   # <- replace with actual filename/module
 
-def print_group(name, group):
-    for k, v in group.items():
-        if isinstance(v, zarr.Array):
-            print(f"{name}/{k:15s} shape={v.shape} dtype={v.dtype} chunks={v.chunks}")
-        elif isinstance(v, zarr.Group):
-            print_group(f"{name}/{k}", v)
+def print_group(name, node):
+    # Array: has .shape/.dtype/.chunks
+    if hasattr(node, "shape") and hasattr(node, "dtype") and hasattr(node, "chunks"):
+        print(f"{name:30s} shape={node.shape} dtype={node.dtype} chunks={node.chunks}")
+        return
+    # Group: has .items() to walk children
+    if hasattr(node, "items"):
+        for k, v in node.items():
+            print_group(f"{name}/{k}" if name else k, v)
+
 
             
 def main():
@@ -43,8 +47,8 @@ def main():
         # --- Inspect contents ---
     g = zarr.open(store, mode='r')
     print("\n=== Stored arrays ===")
-    print_group("", g)   # this will show /data/... and /meta/...
-
+    for path, arr in zarr.open(store, mode='r').arrays():
+        print(f"/{path:25s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
     # --- Integrity checks ---
     T = g["data"]["robot_state"].shape[0]
     E = g["meta"]["episode_ends"].shape[0]
