@@ -19,7 +19,7 @@ shape_meta: &shape_meta
     shape: [7]          # 6 joint commands + 1 gripper command
 
 env_runner:
-  _target_: diffusion_policy.env_runner.real_xarm6_image_runner.RealXArm6ImageRunner
+  _target_: diffusion_policy.env_runner.xarm6_image_runner.Arm6ImageRunner
 
 dataset:
   _target_: diffusion_policy.dataset.real_xarm6_image_dataset.RealXArm6ImageDataset
