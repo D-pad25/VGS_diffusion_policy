@@ -116,8 +116,8 @@ def _detect_dataset_root() -> Path:
             return root
 
     raise FileNotFoundError(
-        "Could not auto-detect dataset root.\n"
-        "Set XARM6_DATASET_PATH or run from the folder that contains Episode*/step*.pkl."
+        "Could not find dataset root. Please set dataset_path in real_xarm_image.yaml "
+        "or XARM6_DATASET_PATH, or run from the dataset folder."
     )
 
 
