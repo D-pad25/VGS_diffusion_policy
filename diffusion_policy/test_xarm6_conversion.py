@@ -35,9 +35,13 @@ def main():
     # --- Inspect contents ---
     g = zarr.open(store, mode='r')
     print("\n=== Stored arrays ===")
-    for k in g.keys():
-        arr = g[k]
-        print(f"{k:15s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
+    for group_name in ["data", "meta"]:
+        if group_name in g:
+            group = g[group_name]
+            print(f"\nGroup: {group_name}")
+            for k, arr in group.items():
+                print(f" {k:15s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
+
 
     # --- Integrity checks ---
     T = g["robot_state"].shape[0]
