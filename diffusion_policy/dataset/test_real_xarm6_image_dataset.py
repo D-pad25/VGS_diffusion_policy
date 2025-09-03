@@ -26,16 +26,16 @@ import hydra
 from omegaconf import OmegaConf
 
 def _compose_cfg(workspace_name: str, dataset_path_override: Optional[str]):
-    # Point Hydra at the repo's config/ directory robustly
-    config_dir = (Path(__file__).resolve().parents[2] / "config").as_posix()
+    # Point Hydra at repo's config directory
+    repo_root = Path(__file__).resolve().parents[2]   # VGS_diffusion_policy/
+    config_dir = (repo_root / "config").as_posix()
     OmegaConf.register_new_resolver("eval", eval, replace=True)
 
     overrides = []
     if dataset_path_override:
         overrides.append(f"task.dataset_path={dataset_path_override}")
 
-    # initialize from an absolute config dir
-    with hydra.initialize_config_dir(config_dir=config_dir, job_name="xarm6_test"):
+    with hydra.initialize_config_dir(config_dir=config_dir, job_name="xarm6_test", version_base=None):
         cfg = hydra.compose(config_name=workspace_name, overrides=overrides)
         OmegaConf.resolve(cfg)
     return cfg
