@@ -96,24 +96,23 @@ def _find_episode_root(start: Path) -> Optional[Path]:
 def _detect_dataset_root() -> Path:
     """
     Priority:
-      1) $XARM6_DATASET_PATH
-      2) real_xarm_image.yaml: task.dataset_path
-      3) current working directory (if it looks like Episode* root)
+      1) real_xarm_image.yaml: task.dataset_path
+      2) $XARM6_DATASET_PATH
     """
-    # 1) ENV
-    env_path = os.environ.get("XARM6_DATASET_PATH", "").strip()
-    if env_path:
-        root = Path(os.path.expanduser(env_path)).resolve()
-        if _find_episode_root(root):
-            print(f"[converter] Using dataset root from $XARM6_DATASET_PATH: {root}")
-            return root
-
-    # 2) Task YAML
+    # 1) Task YAML
     task_cfg = _try_load_task_yaml()
     if task_cfg and task_cfg.get("dataset_path"):
         root = Path(task_cfg["dataset_path"]).expanduser().resolve()
         if root.exists():
             print(f"[converter] Using dataset root from real_xarm_image.yaml: {root}")
+            return root
+
+    # 2) ENV var
+    env_path = os.environ.get("XARM6_DATASET_PATH", "").strip()
+    if env_path:
+        root = Path(env_path).expanduser().resolve()
+        if root.exists():
+            print(f"[converter] Using dataset root from $XARM6_DATASET_PATH: {root}")
             return root
 
     raise FileNotFoundError(
