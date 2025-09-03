@@ -9,11 +9,12 @@ from pathlib import Path
 from diffusion_policy.real_world.real_xarm6_data_conversion import real_data_to_replay_buffer   # <- replace with actual filename/module
 
 def print_group(name, group):
-    for k, arr in group.items():
-        if isinstance(arr, zarr.Array):
-            print(f"{name}/{k:15s} shape={arr.shape} dtype={arr.dtype} chunks={arr.chunks}")
-        elif isinstance(arr, zarr.Group):
-            print_group(f"{name}/{k}", arr)
+    for k, v in group.items():
+        if isinstance(v, zarr.Array):
+            print(f"{name}/{k:15s} shape={v.shape} dtype={v.dtype} chunks={v.chunks}")
+        elif isinstance(v, zarr.Group):
+            print_group(f"{name}/{k}", v)
+
             
 def main():
     ap = argparse.ArgumentParser(description="Test the real_data_to_replay_buffer conversion.")
