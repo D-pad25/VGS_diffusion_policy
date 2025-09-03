@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import numpy as np
 import matplotlib
+from typing import Optional
 # Use non-GUI backend if no display (e.g., WSL without X)
 if os.environ.get("DISPLAY", "") == "":
     matplotlib.use("Agg")
