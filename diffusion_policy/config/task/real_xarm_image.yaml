@@ -2,8 +2,8 @@
 name: real_xarm_image
 
 image_shape: [3, 224, 224]          # 3-channel images after resizing to 224x224
-dataset_path: /home/n10813934/data/diffusion/test_convert     # path to the root of your dataset (episodes directories)
-# dataset_path: /home/d_pad25/Thesis/Data/diffusion_test/test_data    # path to the root of your dataset (episodes directories)
+# dataset_path: /home/n10813934/data/diffusion/test_convert     # path to the root of your dataset (episodes directories)
+dataset_path: /home/d_pad25/Thesis/Data/diffusion_test/test_data    # path to the root of your dataset (episodes directories)
 out_dir: /home/d_pad25/Thesis/Data/diffusion_test/test_cache_replayBuf    # path to the output directory
 
 shape_meta: &shape_meta
