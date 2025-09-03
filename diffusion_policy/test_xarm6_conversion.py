@@ -46,7 +46,6 @@ def main():
         if group_name in g:
             group = g[group_name]
             print(f"\nGroup: {group_name}")
-            print(f"\nGroup: {group_name}")
             print_group(group_name, group)
 
 

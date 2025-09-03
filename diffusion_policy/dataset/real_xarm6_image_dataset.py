@@ -347,7 +347,7 @@ EXAMPLE_SHAPE_META = {
 }
 
 
-'''
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -373,4 +373,4 @@ if __name__ == "__main__":
     print(f"- #seq (train): {len(ds)}")
     print(f"- rgb keys: {ds.rgb_keys}")
     print(f"- low-dim keys: {ds.lowdim_keys}")
-'''
+
