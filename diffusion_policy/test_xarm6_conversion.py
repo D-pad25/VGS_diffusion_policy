@@ -78,11 +78,11 @@ def main():
 
     # optional preview
     if args.preview:
-    for cam in ["wrist_rgb", "base_rgb"]:
-        if cam in g["data"]:
-            img = g["data"][cam][i]   # (H,W,3) uint8
-            cv2.imshow(cam, img[..., ::-1])  # BGR for OpenCV
-
+        for cam in ["wrist_rgb", "base_rgb"]:
+            if cam in g["data"]:
+                img = g["data"][cam][i]   # (H,W,3) uint8
+                cv2.imshow(cam, img[..., ::-1])  # BGR for OpenCV
+        print("Press any key in the OpenCV window(s) to close...")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
