@@ -118,70 +118,30 @@ def _try_load_task_yaml() -> Optional[Dict[str, Any]]:
     except Exception:
         # Last-resort: treat as not found
         return None
-def _try_load_task_yaml() -> Optional[Dict[str, Any]]:
-    """
-    Load dataset_path (and optionally shape_meta) from real_xarm_image.yaml
-    WITHOUT resolving interpolations (to avoid ${...} errors).
-    """
-    try:
-        cfg_path = _find_task_yaml_path()
-        if cfg_path is None:
-            return None
-
-        if OmegaConf is None:
-            # Minimal fallback: parse dataset_path by scanning the file
-            # (keeps things working even if OmegaConf isn't available).
-            text = cfg_path.read_text(encoding="utf-8")
-            for line in text.splitlines():
-                if line.strip().startswith("dataset_path:"):
-                    ds = line.split("dataset_path:", 1)[1].strip()
-                    return {"dataset_path": ds, "shape_meta": None}
-            return None
-
-        cfg = OmegaConf.load(cfg_path.as_posix())
-        dataset_path = cfg.get("dataset_path")
-        # DO NOT resolve shape_meta (may contain ${...} that require full Hydra composition)
-        shape_meta = None
-        if "shape_meta" in cfg:
-            shape_meta = OmegaConf.to_container(cfg.get("shape_meta"), resolve=False)
-
-        # Basic sanity: dataset_path must exist
-        if not dataset_path:
-            return None
-
-        print(f"[converter] Loaded YAML: {cfg_path}")
-        print(f"[converter] YAML dataset_path: {dataset_path}")
-        return {
-            "dataset_path": str(dataset_path),
-            "shape_meta": shape_meta
-        }
-    except Exception:
-        # Last-resort: treat as not found
-        return None
 
 
 def _detect_dataset_root() -> Path:
     """
     Priority:
-      1) real_xarm_image.yaml: task.dataset_path
-      2) $XARM6_DATASET_PATH
+      1) $XARM6_DATASET_PATH
+      2) real_xarm_image.yaml: task.dataset_path
     """
-    # 1) Task YAML
-    task_cfg = _try_load_task_yaml()
-    if task_cfg and task_cfg.get("dataset_path"):
-        root = Path(task_cfg["dataset_path"]).expanduser().resolve()
-        if root.exists():
-            print(f"[converter] Using dataset root from real_xarm_image.yaml: {root}")
-            return root
-
-    # 2) ENV var
+    # 1) ENV var
     env_path = os.environ.get("XARM6_DATASET_PATH", "").strip()
     if env_path:
         root = Path(env_path).expanduser().resolve()
         if root.exists():
             print(f"[converter] Using dataset root from $XARM6_DATASET_PATH: {root}")
             return root
-
+    
+    # 2) Task YAML
+    task_cfg = _try_load_task_yaml()
+    if task_cfg and task_cfg.get("dataset_path"):
+        root = Path(task_cfg["dataset_path"]).expanduser().resolve()
+        if root.exists():
+            print(f"[converter] Using dataset root from real_xarm_image.yaml: {root}")
+            return root
+        
     raise FileNotFoundError(
         "Could not find dataset root. Please set dataset_path in real_xarm_image.yaml "
         "or XARM6_DATASET_PATH, or run from the dataset folder."
