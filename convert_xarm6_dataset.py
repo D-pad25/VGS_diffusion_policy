@@ -166,7 +166,7 @@ def _detect_shape_meta_and_res(task_cfg) -> Tuple[Dict[str, Any], Tuple[int, int
     return shape_meta, cam_res
 
 
-def _md5_cache_name(shape_meta: Dict[str, Any], camera_res: Tuple[int, int]) -> str:
+def _md5_cache_name(shape_meta, camera_res: Tuple[int, int]) -> str:
     fp = {"shape_meta": shape_meta, "camera_res": list(camera_res)}
     shape_meta_json = json.dumps(fp, sort_keys=True)
     return hashlib.md5(shape_meta_json.encode("utf-8")).hexdigest() + ".zarr.zip"
