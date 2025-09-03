@@ -111,16 +111,10 @@ def _detect_dataset_root() -> Path:
     # 2) Task YAML
     task_cfg = _try_load_task_yaml()
     if task_cfg and task_cfg.get("dataset_path"):
-        root = Path(os.path.expanduser(task_cfg["dataset_path"])).resolve()
-        if _find_episode_root(root):
+        root = Path(task_cfg["dataset_path"]).expanduser().resolve()
+        if root.exists():
             print(f"[converter] Using dataset root from real_xarm_image.yaml: {root}")
             return root
-
-    # 3) CWD if it looks like a dataset root
-    cwd = Path.cwd()
-    if _find_episode_root(cwd):
-        print(f"[converter] Using current directory as dataset root: {cwd}")
-        return cwd
 
     raise FileNotFoundError(
         "Could not auto-detect dataset root.\n"
