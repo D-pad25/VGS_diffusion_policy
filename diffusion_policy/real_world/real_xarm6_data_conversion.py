@@ -122,21 +122,28 @@ def real_data_to_replay_buffer(
     # ---------- Build a tiny temp store to leverage ReplayBuffer.copy_from_store ----------
     tmp_store = zarr.MemoryStore()
     tmp_root = zarr.group(store=tmp_store)
-    tmp_root.create_dataset('robot_state', data=robot_state, chunks=robot_state.shape, compressor=None)
-    tmp_root.create_dataset('action', data=actions, chunks=actions.shape, compressor=None)
-    tmp_root.create_dataset('timestamp', data=timestamps, chunks=timestamps.shape, compressor=None)
-    tmp_root.create_dataset('episode_lengths', data=episode_lengths, chunks=episode_lengths.shape, compressor=None)
-    tmp_root.create_dataset('episode_ends', data=episode_ends, chunks=episode_ends.shape, compressor=None)
+    tmp_data = tmp_root.create_group("data")
+
+    tmp_data.create_dataset('robot_state', data=robot_state,
+                            chunks=robot_state.shape, compressor=None)
+    tmp_data.create_dataset('action', data=actions,
+                            chunks=actions.shape, compressor=None)
+    tmp_data.create_dataset('timestamp', data=timestamps,
+                            chunks=timestamps.shape, compressor=None)
+    tmp_data.create_dataset('episode_lengths', data=episode_lengths,
+                            chunks=episode_lengths.shape, compressor=None)
+    tmp_data.create_dataset('episode_ends', data=episode_ends,
+                            chunks=episode_ends.shape, compressor=None)
 
     # Save low-dim as single-chunk arrays (fast random access; matches original pattern)
-    chunks_map = {k: tmp_root[k].shape for k in lowdim_keys if k in tmp_root}
-    compressor_map = {k: lowdim_compressor for k in lowdim_keys if k in tmp_root}
+    chunks_map = {k: tmp_data[k].shape for k in lowdim_keys if k in tmp_data}
+    compressor_map = {k: lowdim_compressor for k in lowdim_keys if k in tmp_data}
 
     # Copy low-dim/meta into output store and get a ReplayBuffer handle
     out_replay_buffer = ReplayBuffer.copy_from_store(
         src_store=tmp_store,
         store=out_store,
-        keys=[k for k in lowdim_keys if k in tmp_root],
+        keys=[k for k in lowdim_keys if k in tmp_data],
         chunks=chunks_map,
         compressors=compressor_map
     )
