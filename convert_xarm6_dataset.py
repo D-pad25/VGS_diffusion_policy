@@ -111,7 +111,7 @@ def _try_load_task_yaml() -> Optional[Dict[str, Any]]:
         return None
 
 
-def _detect_dataset_root() -> Path:
+def _detect_dataset_root(task_cfg) -> Path:
     """
     Priority:
       1) $XARM6_DATASET_PATH
@@ -126,7 +126,6 @@ def _detect_dataset_root() -> Path:
             return root
     
     # 2) Task YAML
-    task_cfg = _try_load_task_yaml()
     if task_cfg and task_cfg.get("dataset_path"):
         root = Path(task_cfg["dataset_path"]).expanduser().resolve()
         if root.exists():
@@ -139,12 +138,11 @@ def _detect_dataset_root() -> Path:
     )
 
 
-def _detect_shape_meta_and_res() -> Tuple[Dict[str, Any], Tuple[int, int]]:
+def _detect_shape_meta_and_res(task_cfg) -> Tuple[Dict[str, Any], Tuple[int, int]]:
     """
     Try to read shape_meta from real_xarm_image.yaml; else use DEFAULT_SHAPE_META.
     Infer camera_res (W,H) from the first rgb entry; else (224,224).
     """
-    task_cfg = _try_load_task_yaml()
     shape_meta = None
     if task_cfg and task_cfg.get("shape_meta"):
         shape_meta = task_cfg["shape_meta"]
@@ -218,8 +216,9 @@ def main():
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     os.environ.setdefault("MKL_NUM_THREADS", "1")
 
-    dataset_root = _detect_dataset_root()
-    shape_meta, camera_res = _detect_shape_meta_and_res()
+    task_cfg = _try_load_task_yaml()
+    dataset_root = _detect_dataset_root(task_cfg)
+    shape_meta, camera_res = _detect_shape_meta_and_res(task_cfg)
     image_keys = [k for k, v in shape_meta["obs"].items() if v.get("type") == "rgb"]
     # default: write Hydra-compatible cache under dataset_root
     if args.out_path is None:
