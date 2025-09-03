@@ -39,44 +39,44 @@ def main():
     )
     print("✅ Conversion complete.")
 
-    # --- Inspect contents ---
+        # --- Inspect contents ---
     g = zarr.open(store, mode='r')
     print("\n=== Stored arrays ===")
-    print_group("", g)
-
+    print_group("", g)   # this will show /data/... and /meta/...
 
     # --- Integrity checks ---
-    T = g["robot_state"].shape[0]
-    E = g["episode_ends"].shape[0]
+    T = g["data"]["robot_state"].shape[0]
+    E = g["meta"]["episode_ends"].shape[0]
     print(f"\nTotal steps (T): {T}, Episodes (E): {E}")
 
     # episode_lengths vs episode_ends consistency
-    ep_lengths = g["episode_lengths"][:]
-    ep_ends = g["episode_ends"][:]
+    ep_lengths = g["meta"]["episode_lengths"][:]
+    ep_ends = g["meta"]["episode_ends"][:]
     assert np.all(ep_ends == np.cumsum(ep_lengths)), "episode_ends != cumsum(episode_lengths)"
     assert ep_ends[-1] == T, "Final episode_end != total steps"
     print("✅ Episode metadata consistent.")
 
     # low-dim checks
-    assert g["robot_state"].shape == (T, 7)
-    assert g["action"].shape == (T, 7)
+    assert g["data"]["robot_state"].shape == (T, 7)
+    assert g["data"]["action"].shape == (T, 7)
     print("✅ robot_state and action have shape (T,7).")
 
     # sample values
     i = 0
-    rs = g["robot_state"][i]
-    act = g["action"][i]
+    rs = g["data"]["robot_state"][i]
+    act = g["data"]["action"][i]
     print(f"\nSample step {i}:")
     print(" robot_state:", rs)
     print(" action     :", act)
-    print(" timestamp  :", g['timestamp'][i])
+    print(" timestamp  :", g["data"]["timestamp"][i])
 
     # optional preview
     if args.preview:
         for cam in ["wrist_rgb", "base_rgb"]:
-            if cam in g:
-                img = g[cam][i]   # (H,W,3) uint8
+            if cam in g["data"]:
+                img = g["data"][cam][i]   # (H,W,3) uint8
                 cv2.imshow(cam, img[..., ::-1])  # BGR for OpenCV
+
         print("Press any key in the OpenCV window(s) to close...")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
