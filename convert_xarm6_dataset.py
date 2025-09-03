@@ -81,12 +81,15 @@ def _try_load_task_yaml() -> Optional[Dict[str, Any]]:
 
 
 def _find_episode_root(start: Path) -> Optional[Path]:
-    """Return start if it looks like a dataset root (has Episode*/step*.pkl), else None."""
+    """
+    Return start if it looks like a dataset root:
+    i.e. it has one or more subdirectories, each containing step*.pkl files.
+    """
     if not start.exists():
         return None
-    # quick heuristic: any subdir named "Episode*" containing at least one step*.pkl
-    for ep in sorted(start.glob("Episode*")):
-        if ep.is_dir() and any(ep.glob("step*.pkl")):
+    # accept ANY subdirectory with step*.pkl inside
+    for sub in sorted(start.iterdir()):
+        if sub.is_dir() and any(sub.glob("step*.pkl")):
             return start
     return None
 
