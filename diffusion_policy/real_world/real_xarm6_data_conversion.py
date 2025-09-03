@@ -123,16 +123,20 @@ def real_data_to_replay_buffer(
     tmp_store = zarr.MemoryStore()
     tmp_root = zarr.group(store=tmp_store)
     tmp_data = tmp_root.create_group("data")
+    tmp_meta = tmp_root.create_group("meta")
 
+    # data arrays
     tmp_data.create_dataset('robot_state', data=robot_state,
                             chunks=robot_state.shape, compressor=None)
     tmp_data.create_dataset('action', data=actions,
                             chunks=actions.shape, compressor=None)
     tmp_data.create_dataset('timestamp', data=timestamps,
                             chunks=timestamps.shape, compressor=None)
-    tmp_data.create_dataset('episode_lengths', data=episode_lengths,
+
+    # meta arrays
+    tmp_meta.create_dataset('episode_lengths', data=episode_lengths,
                             chunks=episode_lengths.shape, compressor=None)
-    tmp_data.create_dataset('episode_ends', data=episode_ends,
+    tmp_meta.create_dataset('episode_ends', data=episode_ends,
                             chunks=episode_ends.shape, compressor=None)
 
     # Save low-dim as single-chunk arrays (fast random access; matches original pattern)
