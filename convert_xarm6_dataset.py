@@ -87,7 +87,6 @@ def _find_episode_root(start: Path) -> Optional[Path]:
     """
     if not start.exists():
         return None
-    # accept ANY subdirectory with step*.pkl inside
     for sub in sorted(start.iterdir()):
         if sub.is_dir() and any(sub.glob("step*.pkl")):
             return start
