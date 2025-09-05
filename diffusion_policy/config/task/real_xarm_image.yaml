@@ -33,7 +33,7 @@ dataset:
   pad_after: ${eval:'${n_action_steps}-1'}
   n_obs_steps: ${dataset_obs_steps}
   n_latency_steps: ${n_latency_steps}
-  use_cache: True                   # cache dataset in memory for speed (optional)
+  use_cache: False                   # cache dataset in memory for speed (optional)
   seed: 42
   val_ratio: 0.1
   max_train_episodes: null
