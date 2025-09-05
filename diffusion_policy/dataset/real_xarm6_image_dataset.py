@@ -130,7 +130,7 @@ class RealXArm6ImageDataset(BaseImageDataset):
         pad_after: int = 0,
         n_obs_steps: Optional[int] = None,
         n_latency_steps: int = 0,
-        use_cache: bool = True,
+        use_cache: bool = False,
         seed: int = 42,
         val_ratio: float = 0.1,
         max_train_episodes: Optional[int] = None,
