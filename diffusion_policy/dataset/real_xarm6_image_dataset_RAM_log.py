@@ -62,7 +62,7 @@ def _fmt_bytes(n: Optional[int]) -> str:
         n /= 1024
     return f"{n:.1f} PB"
 
-def _current_rss_bytes() -> int | None:
+def _current_rss_bytes() -> Optional[int]:
     if psutil is not None:
         return psutil.Process(os.getpid()).memory_info().rss
     # Linux fallback
@@ -84,7 +84,7 @@ def log_mem(tag: str = ""):
                 f" | GPU reserved={_fmt_bytes(torch.cuda.memory_reserved())}")
     print(msg, flush=True)
 
-def approx_replaybuffer_bytes(rb) -> tuple[list[tuple[str, int | None]], int]:
+def approx_replaybuffer_bytes(rb) -> tuple[list[tuple[str, Optional[int]]], int]:
     """Best-effort estimate without forcing full loads."""
     total = 0
     rows = []
