@@ -215,7 +215,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 policy.eval()
 
                 # run rollout
-                print("Rollout every is ", cfg.training.rollout_every)
+                # print("Rollout every is ", cfg.training.rollout_every)
                 if cfg.training.rollout_every is not None and (self.epoch % cfg.training.rollout_every) == 0:
                     runner_log = env_runner.run(policy)
                     # log all
