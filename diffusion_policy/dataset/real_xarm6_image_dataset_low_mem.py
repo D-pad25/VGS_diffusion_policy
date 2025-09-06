@@ -365,14 +365,16 @@ class RealXArm6ImageDataset(BaseImageDataset):
     def get_normalizer(self, **kwargs) -> LinearNormalizer:
         normalizer = LinearNormalizer()
 
-        # action (streamed stats)
-        m, s = _stream_mean_std(self.replay_buffer["action"])
-        normalizer["action"] = SingleFieldLinearNormalizer(mean=m, std=s)
+        # action
+        normalizer["action"] = SingleFieldLinearNormalizer.create_fit(
+            self.replay_buffer["action"]
+        )
 
         # low-dim obs
         for key in self.lowdim_keys:
-            m, s = _stream_mean_std(self.replay_buffer[key])
-            normalizer[key] = SingleFieldLinearNormalizer(mean=m, std=s)
+            normalizer[key] = SingleFieldLinearNormalizer.create_fit(
+                self.replay_buffer[key]
+            )
 
         # images → [0,1]
         for key in self.rgb_keys:
