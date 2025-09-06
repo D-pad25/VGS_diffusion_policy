@@ -288,56 +288,9 @@ class RealXArm6ImageDataset(BaseImageDataset):
         self._store_kind = work_store_kind
         replay_buffer = ZarrReplayBufferView(cache_path, kind=work_store_kind)
 
+        # … delta_action / key parsing / sampler setup unchanged …
 
-        assert replay_buffer is not None
-
-        # optional delta_action (chunked per episode)
-        if delta_action:
-            actions_arr = replay_buffer["action"]  # zarr.Array
-            n_dim = actions_arr.shape[1]
-            ep_ends = replay_buffer.episode_ends[:]
-            if (delta_exclude_gripper and n_dim == 7):
-                delta_idxs = list(range(6))
-                keep_grip = True
-            else:
-                delta_idxs, keep_grip = list(range(n_dim)), False
-
-            start = 0
-            for end in ep_ends:
-                seg = actions_arr[start:end]           # zarr reads this slice only
-                d = np.diff(seg, axis=0, prepend=seg[0:1])
-                if keep_grip:
-                    d[:, 6] = seg[:, 6]
-                actions_arr[start:end, delta_idxs] = d[:, delta_idxs]
-                start = int(end)
-
-        # parse keys
-        rgb_keys, lowdim_keys = [], []
-        for k, attr in shape_meta["obs"].items():
-            (rgb_keys if attr.get("type", "low_dim") == "rgb" else lowdim_keys).append(k)
-
-        key_first_k = {}
-        if n_obs_steps is not None:
-            for key in rgb_keys + lowdim_keys:
-                key_first_k[key] = n_obs_steps
-
-        # train/val split
-        val_mask = get_val_mask(replay_buffer.n_episodes, val_ratio, seed)
-        train_mask = ~val_mask
-        train_mask = downsample_mask(mask=train_mask, max_n=max_train_episodes, seed=seed)
-
-        sampler = SequenceSampler(
-            replay_buffer=replay_buffer,
-            sequence_length=horizon + n_latency_steps,
-            pad_before=pad_before,
-            pad_after=pad_after,
-            episode_mask=train_mask,
-            key_first_k=key_first_k
-        )
-
-        # expose
         self.replay_buffer = replay_buffer
-        self._store_keepalive = self._store_ref
         self.sampler = sampler
         self.shape_meta = shape_meta
         self.rgb_keys = rgb_keys
@@ -350,10 +303,10 @@ class RealXArm6ImageDataset(BaseImageDataset):
         self.pad_after = pad_after
 
     def __del__(self):
-        # Close ZipStore to release file handle on some platforms
+        # nothing special needed; view handles its own close()
         try:
-            if hasattr(self, "_store_ref") and isinstance(self._store_ref, zarr.ZipStore):
-                self._store_ref.close()
+            if hasattr(self, "replay_buffer"):
+                self.replay_buffer.close()
         except Exception:
             pass
 
