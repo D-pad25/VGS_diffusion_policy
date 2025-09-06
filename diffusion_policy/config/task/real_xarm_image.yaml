@@ -27,6 +27,7 @@ dataset:
   _target_: diffusion_policy.dataset.real_xarm6_image_dataset.RealXArm6ImageDataset
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
+  work_store_kind: zip        # "dir" or "zip" for the cache file
   # out_dir: ${task.out_dir}     # COMMENT OUT IF TRAINING
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1+${n_latency_steps}'}
