@@ -59,6 +59,15 @@ class ZarrReplayBufferView:
         # Return zarr.Array (chunked, lazy)
         return self.data[key]
 
+    def keys(self):
+        return list(self.data.keys()) + list(self.meta.keys())
+
+    def values(self):
+        return [self[k] for k in self.keys()]
+
+    def items(self):
+        return [(k, self[k]) for k in self.keys()]
+
     @property
     def episode_ends(self):
         return self.meta['episode_ends']  # zarr.Array
@@ -70,6 +79,7 @@ class ZarrReplayBufferView:
     def close(self):
         # Zip/Directory stores don't need explicit close (ZipStore can be closed explicitly)
         pass
+
 
 
 # ---------- Safe last-dim slicer (no full array read) ----------
