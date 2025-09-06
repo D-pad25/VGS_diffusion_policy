@@ -53,7 +53,7 @@ try:
 except ImportError:
     psutil = None
 
-def _fmt_bytes(n: int | None) -> str:
+def _fmt_bytes(n: Optional[int]) -> str:
     if n is None:
         return "unknown"
     for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
