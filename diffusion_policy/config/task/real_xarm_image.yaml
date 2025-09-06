@@ -16,10 +16,10 @@ image_shape: [3, 224, 224]          # 3-channel images after resizing to 224x224
 # out_dir: /mnt/d/Sem2/diffusion/data_out
 
 ## WORK LAPTOP ##
-# dataset_path: /mnt/d/Data/Sem2/Round_1/gello    # path to the root of your dataset (episodes directories)
-# out_dir: /mnt/d/Data/Sem2/diffusion/converted    # path to the output directory
-dataset_path: /mnt/d/Data/Sem2/diffusion/data_test    # path to the root of your dataset (episodes directories)
-out_dir: /mnt/d/Data/Sem2/diffusion/data_out    # path to the output directory
+dataset_path: /mnt/d/Data/Sem2/Round_1/gello    # path to the root of your dataset (episodes directories)
+out_dir: /mnt/d/Data/Sem2/diffusion/converted    # path to the output directory
+# dataset_path: /mnt/d/Data/Sem2/diffusion/data_test    # path to the root of your dataset (episodes directories)
+# out_dir: /mnt/d/Data/Sem2/diffusion/data_out    # path to the output directory
 
 
 shape_meta: &shape_meta
@@ -40,12 +40,13 @@ env_runner:
   _target_: diffusion_policy.env_runner.xarm6_image_runner.XArm6ImageRunner
 
 dataset:
-  _target_: diffusion_policy.dataset.real_xarm6_image_dataset_RAM_log.RealXArm6ImageDataset
+  _target_: diffusion_policy.dataset.real_xarm6_image_dataset.RealXArm6ImageDataset
+  # _target_: diffusion_policy.dataset.real_xarm6_image_dataset_RAM_log.RealXArm6ImageDataset
   # _target_: diffusion_policy.dataset.real_xarm6_image_dataset_low_mem.RealXArm6ImageDataset # low memory version
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
   # work_store_kind: dir        # "dir" or "zip" for the cache file
-  mem_debug: true
+  # mem_debug: true
   out_dir: ${task.out_dir}     # COMMENT OUT IF TRAINING
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1+${n_latency_steps}'}
