@@ -56,11 +56,16 @@ class ZarrReplayBufferView:
         self.meta = self._root['meta']
 
     def __getitem__(self, key):
-        # Return zarr.Array (chunked, lazy)
-        return self.data[key]
+        if key in self.data:
+            return self.data[key]
+        elif key in self.meta:
+            return self.meta[key]
+        else:
+            raise KeyError(key)
 
     def keys(self):
-        return list(self.data.keys()) + list(self.meta.keys())
+        # SequenceSampler should only iterate data keys, not meta
+        return list(self.data.keys())
 
     def values(self):
         return [self[k] for k in self.keys()]
@@ -70,15 +75,16 @@ class ZarrReplayBufferView:
 
     @property
     def episode_ends(self):
-        return self.meta['episode_ends']  # zarr.Array
+        return self.meta['episode_ends']
 
     @property
     def n_episodes(self) -> int:
         return int(self.meta['episode_ends'].shape[0])
 
     def close(self):
-        # Zip/Directory stores don't need explicit close (ZipStore can be closed explicitly)
-        pass
+        if isinstance(self._store, zarr.ZipStore):
+            self._store.close()
+
 
 
 
