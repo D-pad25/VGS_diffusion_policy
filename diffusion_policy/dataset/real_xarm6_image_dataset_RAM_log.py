@@ -198,6 +198,7 @@ class RealXArm6ImageDataset(BaseImageDataset):
         assert os.path.isdir(dataset_path), f"dataset_path not found: {dataset_path}"
 
         # Build or load cache
+        self.mem_debug = mem_debug
         replay_buffer: Optional[ReplayBuffer] = None
         
         if use_cache:
@@ -343,7 +344,6 @@ class RealXArm6ImageDataset(BaseImageDataset):
         self.n_latency_steps = n_latency_steps
         self.pad_before = pad_before
         self.pad_after = pad_after
-        self.mem_debug = mem_debug
 
     # -------------------- Public API --------------------
     def get_validation_dataset(self):
