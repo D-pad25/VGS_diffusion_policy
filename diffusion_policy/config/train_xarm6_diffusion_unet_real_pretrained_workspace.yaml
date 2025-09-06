@@ -43,8 +43,8 @@ policy:
       _target_: diffusion_policy.model.vision.model_getter.get_resnet
       name: resnet18
       weights: IMAGENET1K_V1 # or r3m
-    resize_shape: null
-    crop_shape: [224, 224]
+    resize_shape: [224, 224]
+    crop_shape: null  # Match your downsampled image size
     random_crop: False
     use_group_norm: False
     share_rgb_model: True
@@ -131,10 +131,10 @@ logging:
 
 checkpoint:
   topk:
-    monitor_key: train_loss
+    monitor_key: val_loss
     mode: min
     k: 5
-    format_str: 'epoch={epoch:04d}-train_loss={train_loss:.3f}.ckpt'
+    format_str: 'epoch={epoch:04d}-val_loss={val_loss:.3f}.ckpt'
   save_last_ckpt: True
   save_last_snapshot: False
 
