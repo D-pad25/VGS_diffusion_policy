@@ -24,7 +24,7 @@ env_runner:
   _target_: diffusion_policy.env_runner.xarm6_image_runner.XArm6ImageRunner
 
 dataset:
-  _target_: diffusion_policy.dataset.real_xarm6_image_dataset.RealXArm6ImageDataset
+  _target_: diffusion_policy.dataset.real_xarm6_image_dataset_low_mem.RealXArm6ImageDataset
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
   work_store_kind: zip        # "dir" or "zip" for the cache file
