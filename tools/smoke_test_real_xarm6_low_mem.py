@@ -43,7 +43,12 @@ from diffusion_policy.dataset.real_xarm6_image_dataset_low_mem import (
 
 def _expected_cache_path(target_dir, shape_meta, camera_res, work_store_kind):
     """Reproduce the dataset's cache naming to print where the cache should live."""
-    fp = {"shape_meta": OmegaConf.to_container(shape_meta), "camera_res": camera_res}
+    if OmegaConf.is_config(shape_meta):
+        shape_meta_serializable = OmegaConf.to_container(shape_meta)
+    else:
+        shape_meta_serializable = shape_meta
+
+    fp = {"shape_meta": shape_meta_serializable, "camera_res": camera_res}
     h = hashlib.md5(json.dumps(fp, sort_keys=True).encode("utf-8")).hexdigest()
     return os.path.join(target_dir, f"{h}.zarr" + (".zip" if work_store_kind == "zip" else ""))
 
