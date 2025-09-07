@@ -46,7 +46,7 @@ policy:
     resize_shape: [224, 224]
     crop_shape: null  # Match your downsampled image size
     random_crop: False
-    use_group_norm: False
+    use_group_norm: True # Was false
     share_rgb_model: True
     imagenet_norm: True
 
@@ -56,9 +56,9 @@ policy:
   num_inference_steps: 100
   obs_as_global_cond: ${obs_as_global_cond}
   # crop_shape: null
-  diffusion_step_embed_dim: 128
-  down_dims: [512, 1024, 2048]
-  kernel_size: 5
+  diffusion_step_embed_dim: 128 # was 128 (try 64 if too long)
+  down_dims: [512,1024,2048] # was [512,1024,2048] (try [256, 512, 1024] if too long)
+  kernel_size: 5 # was 5 (try 3 if too long)
   n_groups: 8
   cond_predict_scale: True
 
@@ -74,14 +74,14 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 32
-  num_workers: 12 # Was 4
+  batch_size: 64
+  num_workers: 16 # Was 4
   shuffle: True
   pin_memory: True
   persistent_workers: True
 
 val_dataloader:
-  batch_size: 32
+  batch_size: 64
   num_workers: 8 # Was 4
   shuffle: False
   pin_memory: True
@@ -89,20 +89,20 @@ val_dataloader:
 
 optimizer:
   _target_: torch.optim.AdamW
-  lr: 1.0e-4
+  lr: 2.0e-4          # was 1.0e-4  ← scale LR with batch (32→64 ≈ ×2)
   betas: [0.95, 0.999]
   eps: 1.0e-8
-  weight_decay: 1.0e-6
+  weight_decay: 2.0e-6 # was 1.0e-6  ← tiny nudge for stability
 
 training:
   device: "cuda:0"
   seed: 42
   debug: False
-  resume: False  # Change back to True
+  resume: True  # Change back to True
   # optimization
   lr_scheduler: cosine
-  lr_warmup_steps: 500
-  num_epochs: 1 # Change back to 600
+  lr_warmup_steps: 1500  # was 500   ← safer ramp with larger batch
+  num_epochs: 60 # Change back to 600
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.
@@ -111,18 +111,18 @@ training:
   # training loop control
   # in epochs
   rollout_every: null # Change back to 50
-  checkpoint_every: 51 # Change back to 50
+  checkpoint_every: 5 # Change back to 50
   val_every: 1
   sample_every: 5
   # steps per epoch
-  max_train_steps: 6000 # Change back to null
-  max_val_steps: 128 # Change back to null
+  max_train_steps: null # Change back to null
+  max_val_steps: 512 # Change back to null
   # misc
   tqdm_interval_sec: 1.0
 
 logging:
   project: xarm6_diffusion_policy
-  resume: False # Change back to True
+  resume: True # Change back to True
   mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]

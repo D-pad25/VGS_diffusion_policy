@@ -4,8 +4,8 @@ name: real_xarm_image
 image_shape: [3, 224, 224]          # 3-channel images after resizing to 224x224
 
 ## HPC ##
-# dataset_path: /home/n10813934/data/diffusion/converted     # path to the root of your dataset (episodes directories)
-dataset_path: /home/n10813934/data/diffusion/test     # path to the root of your dataset (episodes directories)
+dataset_path: /home/n10813934/data/diffusion/converted     # path to the root of your dataset (episodes directories)
+# dataset_path: /home/n10813934/data/diffusion     # path to the root of your dataset (episodes directories)
 
 ## BASE LAPTOP ##
 # dataset_path: /home/d_pad25/Thesis/Data/diffusion_test/test_data    # path to the root of your dataset (episodes directories)
@@ -45,7 +45,6 @@ dataset:
   # _target_: diffusion_policy.dataset.real_xarm6_image_dataset_low_mem.RealXArm6ImageDataset # low memory version
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
-  zipped: True
   # work_store_kind: dir        # "dir" or "zip" for the cache file
   # mem_debug: true
   # out_dir: ${task.out_dir}     # COMMENT OUT IF TRAINING
