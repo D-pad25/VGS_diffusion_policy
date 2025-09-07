@@ -5,47 +5,12 @@ import numpy as np
 import os
 import time
 import pickle
-from xarm.wrapper import XArmAPI
+# from xarm.wrapper import XArmAPI
 import datetime
 import socket
 import asyncio
 import json
 from xarm6_control.gripper_client_async_v2 import GripperClient
-
-class GripperClientAsync_old:
-    def __init__(self, host='127.0.0.1', port=22345):
-        self.host = host
-        self.port = port
-        self.reader = None
-        self.writer = None
-
-    async def connect(self):
-        if self.reader is None or self.writer is None:
-            self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
-            print("[Client] Connected to gripper server")
-
-    async def disconnect(self):
-        if self.writer:
-            self.writer.close()
-            await self.writer.wait_closed()
-            print("[Client] Disconnected")
-            self.reader = self.writer = None
-
-    async def send_gripper_command(self, cmd_type: str, payload=None):
-        await self.connect()
-        message = json.dumps({"cmd": cmd_type, "value": payload})
-        self.writer.write((message + "\n").encode())
-        await self.writer.drain()
-
-        response = await self.reader.readline()
-        return json.loads(response.decode())
-
-    async def set_gripper(self, value: float):
-        assert 0.0 <= value <= 1.0, "Gripper value must be between 0.0 and 1.0"
-        return await self.send_gripper_command("SET", round(value, 3))
-
-    async def receive_gripper_position(self):
-        return await self.send_gripper_command("GET")
     
 class XArmRealEnv:
     def __init__(self, ip="192.168.1.203", camera_dict=None):
