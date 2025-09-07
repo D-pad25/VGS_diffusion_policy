@@ -205,27 +205,6 @@ class XArmRealEnv:
             pickle.dump(data, f)
 
 # mock_xarm_env.py
-'''
-class MockXArmEnv:
-    def __init__(self, camera_dict=None):
-        self.camera_dict = camera_dict or {}
-
-    def get_observation(self):
-        obs = {
-            "joint_position": np.random.uniform(low=-1.0, high=1.0, size=(6,)),
-            "gripper_position": np.array([np.random.uniform(0.0, 1.0)]),
-        }
-
-        # Fake camera images if cameras exist
-        for name in self.camera_dict:
-            obs[f"{name}_rgb"] = np.random.randint(0, 256, size=(480, 640, 3), dtype=np.uint8)
-
-        return obs
-
-    def step(self, action):
-        print(f"[STEP] Action received: {action}")
-'''
-# mock_xarm_env.py
 class MockXArmEnv:
     def __init__(self, camera_dict=None):
         self.camera_dict = camera_dict or {}
