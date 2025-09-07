@@ -102,7 +102,7 @@ training:
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 1500  # was 500   ← safer ramp with larger batch
-  num_epochs: 60 # Change back to 600
+  num_epochs: 40 # Change back to 600
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.
