@@ -443,5 +443,19 @@ To test the data conversion, run:
 XARM6_WORKSPACE=train_xarm6_diffusion_unet_real_pretrained_workspace \
 XARM6_DATASET_PATH=/home/d_pad25/Thesis/Data/diffusion_test/test_data \
 python -m diffusion_policy.dataset.test_real_xarm6_image_dataset
+```
+----------------------------------------------------------------------------------
+-------------------------------- DATA CONVERSION  --------------------------------
+----------------------------------------------------------------------------------
+```bash
+XARM6_WORKSPACE=train_xarm6_diffusion_unet_real_pretrained_workspace \
+XARM6_DATASET_PATH=/home/d_pad25/Thesis/Data/diffusion_test/test_data \
+python -m diffusion_policy.dataset.test_real_xarm6_image_dataset
+```
 
+----------------------------------------------------------------------------------
+------------------------------------ TRAINING ------------------------------------
+----------------------------------------------------------------------------------
+```bash
+python train.py --config-name=train_xarm6_diffusion_unet_real_pretrained_workspace
 ```
