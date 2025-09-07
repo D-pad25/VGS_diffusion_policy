@@ -50,4 +50,4 @@ def show_example_images(folder_path=".", idx=None):
     plt.show()
 
 # Example usage
-show_example_images("/home/d_pad25/Thesis/Data/diffusion_test/test_pad")
+show_example_images("/home/d_pad25/Thesis/Data/diffusion_test/image", idx=4605)
