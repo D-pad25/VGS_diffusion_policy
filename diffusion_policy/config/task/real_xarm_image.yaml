@@ -40,7 +40,7 @@ env_runner:
   _target_: diffusion_policy.env_runner.xarm6_image_runner.XArm6ImageRunner
 
 dataset:
-  _target_: diffusion_policy.dataset.real_xarm6_image_dataset.RealXArm6ImageDataset
+  _target_: diffusion_policy.dataset.real_xarm6_image_dataset_test.RealXArm6ImageDataset
   # _target_: diffusion_policy.dataset.real_xarm6_image_dataset_RAM_log.RealXArm6ImageDataset
   # _target_: diffusion_policy.dataset.real_xarm6_image_dataset_low_mem.RealXArm6ImageDataset # low memory version
   shape_meta: *shape_meta
