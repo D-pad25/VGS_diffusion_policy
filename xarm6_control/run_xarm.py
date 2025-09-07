@@ -33,8 +33,8 @@ from collections import deque
 from typing import Dict, Tuple
 
 # --- Your existing modules ---
-from xarm_env import XArmRealEnv, MockXArmEnv
-from zmq_core.camera_node import ZMQClientCamera
+from xarm6_control.xarm_env import XArmRealEnv, MockXArmEnv
+from xarm6_control.zmq_core.camera_node import ZMQClientCamera
 
 
 # --- Diffusion Policy imports ---

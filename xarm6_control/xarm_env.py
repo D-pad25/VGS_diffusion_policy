@@ -10,7 +10,7 @@ import datetime
 import socket
 import asyncio
 import json
-from gripper_client_async_v2 import GripperClient
+from xarm6_control.gripper_client_async_v2 import GripperClient
 
 class GripperClientAsync_old:
     def __init__(self, host='127.0.0.1', port=22345):
