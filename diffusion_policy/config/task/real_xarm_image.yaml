@@ -8,16 +8,16 @@ image_shape: [3, 224, 224]          # 3-channel images after resizing to 224x224
 # dataset_path: /home/n10813934/data/diffusion     # path to the root of your dataset (episodes directories)
 
 ## BASE LAPTOP ##
-dataset_path: /home/d_pad25/Thesis/Data/diffusion_test/test_data    # path to the root of your dataset (episodes directories)
-out_dir: /home/d_pad25/Thesis/Data/diffusion_test/test_pad    # path to the output directory
+# dataset_path: /home/d_pad25/Thesis/Data/diffusion_test/test_data    # path to the root of your dataset (episodes directories)
+# out_dir: /home/d_pad25/Thesis/Data/diffusion_test/test_pad    # path to the output directory
 
 ## SSD ##
 # dataset_path: /mnt/d/Sem2/diffusion/data_test
 # out_dir: /mnt/d/Sem2/diffusion/data_out
 
 ## WORK LAPTOP ##
-# dataset_path: /mnt/d/Data/Sem2/Round_1/gello    # path to the root of your dataset (episodes directories)
-# out_dir: /mnt/d/Data/Sem2/diffusion/converted    # path to the output directory
+dataset_path: /mnt/d/Data/Sem2/Round_1/gello    # path to the root of your dataset (episodes directories)
+out_dir: /mnt/d/Data/Sem2/diffusion/converted_padded    # path to the output directory
 # dataset_path: /mnt/d/Data/Sem2/diffusion/data_test    # path to the root of your dataset (episodes directories)
 # out_dir: /mnt/d/Data/Sem2/diffusion/data_out    # path to the output directory
 
