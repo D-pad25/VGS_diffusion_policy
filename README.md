@@ -459,3 +459,15 @@ python -m diffusion_policy.dataset.test_real_xarm6_image_dataset
 ```bash
 python train.py --config-name=train_xarm6_diffusion_unet_real_pretrained_workspace
 ```
+
+----------------------------------------------------------------------------------
+-------------------------------- INFERENCE - MOCK --------------------------------
+----------------------------------------------------------------------------------
+STEP 1) Update Checkpoint variable
+```bash
+CKPT=$(ls -t /home/n10813934/gitRepos/VGS_diffusion_policy/data/outputs/2025.09.07/15.13.59_train_xarm6_diffusion_unet_image_pretrained_real_xarm_image/checkpoints/*.ckpt 2>/dev/null | head -n 1);
+```
+STEP 2) Inference Script
+```bash
+python -m xarm6_control.run_xarm --ckpt "$CKPT" --mock --max_steps 60 --control_hz 30 --step_through_instructions
+```
