@@ -10,6 +10,7 @@ import cv2
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 from diffusion_policy.common.cv2_util import get_image_transform
 from diffusion_policy.codecs.imagecodecs_numcodecs import register_codecs, Jpeg2k
+from tools.resize_pkl import resize_with_pad
 register_codecs()
 
 def real_data_to_replay_buffer(
@@ -222,8 +223,9 @@ def real_data_to_replay_buffer(
                         in_h, in_w = int(frame.shape[0]), int(frame.shape[1])
                         arr = out_replay_buffer[k]
                         out_h, out_w = arr.shape[1], arr.shape[2]
-                        tf = get_tf(k, in_w, in_h, out_w, out_h)
-                        img_out = tf(frame)  # uint8, HxWx3
+                        # tf = get_tf(k, in_w, in_h, out_w, out_h)
+                        # img_out = tf(frame)  # uint8, HxWx3
+                        img_out = resize_with_pad(frame, out_h, out_w)
 
                         if len(futures) >= max_inflight_tasks:
                             done, futures = concurrent.futures.wait(

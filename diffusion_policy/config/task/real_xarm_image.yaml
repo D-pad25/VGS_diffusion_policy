@@ -4,12 +4,12 @@ name: real_xarm_image
 image_shape: [3, 224, 224]          # 3-channel images after resizing to 224x224
 
 ## HPC ##
-dataset_path: /home/n10813934/data/diffusion/converted     # path to the root of your dataset (episodes directories)
+# dataset_path: /home/n10813934/data/diffusion/converted     # path to the root of your dataset (episodes directories)
 # dataset_path: /home/n10813934/data/diffusion     # path to the root of your dataset (episodes directories)
 
 ## BASE LAPTOP ##
-# dataset_path: /home/d_pad25/Thesis/Data/diffusion_test/test_data    # path to the root of your dataset (episodes directories)
-# out_dir: /home/d_pad25/Thesis/Data/diffusion_test/test_zip    # path to the output directory
+dataset_path: /home/d_pad25/Thesis/Data/diffusion_test/test_data    # path to the root of your dataset (episodes directories)
+out_dir: /home/d_pad25/Thesis/Data/diffusion_test/test_pad    # path to the output directory
 
 ## SSD ##
 # dataset_path: /mnt/d/Sem2/diffusion/data_test
@@ -47,7 +47,7 @@ dataset:
   dataset_path: ${task.dataset_path}
   # work_store_kind: dir        # "dir" or "zip" for the cache file
   # mem_debug: true
-  # out_dir: ${task.out_dir}     # COMMENT OUT IF TRAINING
+  out_dir: ${task.out_dir}     # COMMENT OUT IF TRAINING
   horizon: ${horizon}
   pad_before: ${eval:'${n_obs_steps}-1+${n_latency_steps}'}
   pad_after: ${eval:'${n_action_steps}-1'}
