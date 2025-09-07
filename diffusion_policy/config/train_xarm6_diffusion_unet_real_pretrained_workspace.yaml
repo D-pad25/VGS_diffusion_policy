@@ -75,14 +75,14 @@ ema:
 
 dataloader:
   batch_size: 32
-  num_workers: 4
+  num_workers: 12 # Was 4
   shuffle: True
   pin_memory: True
   persistent_workers: True
 
 val_dataloader:
   batch_size: 32
-  num_workers: 4
+  num_workers: 8 # Was 4
   shuffle: False
   pin_memory: True
   persistent_workers: True
@@ -98,11 +98,11 @@ training:
   device: "cuda:0"
   seed: 42
   debug: False
-  resume: True
+  resume: False  # Change back to True
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 600
+  num_epochs: 1 # Change back to 600
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.
@@ -110,19 +110,19 @@ training:
   freeze_encoder: True
   # training loop control
   # in epochs
-  rollout_every: 50
-  checkpoint_every: 50
+  rollout_every: null # Change back to 50
+  checkpoint_every: 51 # Change back to 50
   val_every: 1
   sample_every: 5
   # steps per epoch
-  max_train_steps: null
-  max_val_steps: null
+  max_train_steps: 6000 # Change back to null
+  max_val_steps: 128 # Change back to null
   # misc
   tqdm_interval_sec: 1.0
 
 logging:
   project: xarm6_diffusion_policy
-  resume: True
+  resume: False # Change back to True
   mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
