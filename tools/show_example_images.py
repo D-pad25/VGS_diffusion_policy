@@ -1,28 +1,37 @@
+import os
 import random
 import matplotlib.pyplot as plt
 import zarr
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 
-def show_example_images(zarr_path: str, idx: int = None):
+def show_example_images(folder_path: str, idx: int = None):
     """
     Show example wrist and base images from a converted ReplayBuffer.
-
-    Args:
-        zarr_path (str): Path to your .zarr.zip file (converted dataset).
-        idx (int, optional): Index of the frame to show. If None, selects random frame.
-    """
-    # Load replay buffer
-    with zarr.ZipStore(zarr_path, mode='r') as store:
-        rb = ReplayBuffer.copy_from_store(store, store=zarr.MemoryStore())
     
-    T = rb['base_rgb'].shape[0]
+    Args:
+        folder_path (str): Path to folder containing the .zarr.zip dataset.
+        idx (int, optional): Index of frame to display. If None, selects random frame.
+    """
+    # find first zarr.zip file in folder
+    zarr_files = [f for f in os.listdir(folder_path) if f.endswith(".zarr.zip")]
+    if not zarr_files:
+        raise FileNotFoundError(f"No .zarr.zip files found in {folder_path}")
+    zarr_path = os.path.join(folder_path, zarr_files[0])
+    print(f"Loading dataset: {zarr_path}")
+
+    # load replay buffer
+    with zarr.ZipStore(zarr_path, mode="r") as store:
+        rb = ReplayBuffer.copy_from_store(store, store=zarr.MemoryStore())
+
+    # pick random index if not given
+    T = rb["base_rgb"].shape[0]
     if idx is None:
         idx = random.randint(0, T - 1)
-    
-    wrist_img = rb['wrist_rgb'][idx]
-    base_img = rb['base_rgb'][idx]
 
-    # Plot side by side
+    wrist_img = rb["wrist_rgb"][idx]
+    base_img = rb["base_rgb"][idx]
+
+    # plot images
     fig, axes = plt.subplots(1, 2, figsize=(8, 4))
     axes[0].imshow(wrist_img)
     axes[0].set_title(f"Wrist RGB (idx={idx})")
@@ -34,3 +43,6 @@ def show_example_images(zarr_path: str, idx: int = None):
 
     plt.tight_layout()
     plt.show()
+
+# Example usage:
+show_example_images(r"\\wsl.localhost\Ubuntu-22.04\home\d_pad25\Thesis\Data\diffusion_test\image")
