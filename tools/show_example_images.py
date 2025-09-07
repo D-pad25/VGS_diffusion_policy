@@ -2,7 +2,12 @@ import os
 import random
 import matplotlib.pyplot as plt
 import zarr
+
 from diffusion_policy.common.replay_buffer import ReplayBuffer
+from diffusion_policy.codecs.imagecodecs_numcodecs import register_codecs
+
+# register JPEG2000 and other codecs
+register_codecs()
 
 def show_example_images(folder_path=".", idx=None):
     """
