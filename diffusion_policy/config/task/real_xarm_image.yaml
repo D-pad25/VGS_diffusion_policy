@@ -45,6 +45,7 @@ dataset:
   # _target_: diffusion_policy.dataset.real_xarm6_image_dataset_low_mem.RealXArm6ImageDataset # low memory version
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
+  zipped: False
   # work_store_kind: dir        # "dir" or "zip" for the cache file
   # mem_debug: true
   # out_dir: ${task.out_dir}     # COMMENT OUT IF TRAINING

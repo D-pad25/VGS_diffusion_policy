@@ -137,6 +137,7 @@ class RealXArm6ImageDataset(BaseImageDataset):
         delta_action: bool = False,
         delta_exclude_gripper: bool = True,
         camera_res: Tuple[int, int] = (224, 224),
+        zipped: bool = True,
     ) -> None:
         assert os.path.isdir(dataset_path), f"dataset_path not found: {dataset_path}"
 
@@ -153,13 +154,16 @@ class RealXArm6ImageDataset(BaseImageDataset):
             shape_meta_hash = hashlib.md5(shape_meta_json.encode("utf-8")).hexdigest()
             # use out_dir if provided, else default to dataset_path
             target_dir = out_dir if out_dir is not None else dataset_path
-            cache_zarr_path = os.path.join(target_dir, f"{shape_meta_hash}.zarr.zip")
+            if zipped:
+                cache_zarr_path = os.path.join(target_dir, f"{shape_meta_hash}.zarr.zip")
+            else:
+                cache_zarr_path = os.path.join(target_dir, f"{shape_meta_hash}.zarr")
             cache_lock_path = cache_zarr_path + ".lock"
 
             print(f"[RealXArm6ImageDataset] Acquiring cache lock: {cache_lock_path}")
             with FileLock(cache_lock_path):
                 with FileLock(cache_lock_path):
-                    if os.path.exists(cache_zarr_path):
+                    if zipped and os.path.exists(cache_zarr_path):
                         print("[RealXArm6ImageDataset] Cache hit (.zarr.zip) → loading ReplayBuffer from disk...")
                         with zarr.ZipStore(cache_zarr_path, mode="r") as zip_store:
                             replay_buffer = ReplayBuffer.copy_from_store(
@@ -167,10 +171,9 @@ class RealXArm6ImageDataset(BaseImageDataset):
                             )
                         print("[RealXArm6ImageDataset] Cache loaded from zip.")
 
-                    elif os.path.exists(cache_zarr_path.replace(".zip","")):  # <-- NEW branch
-                        dir_path = cache_zarr_path.replace(".zip","")
-                        print(f"[RealXArm6ImageDataset] Cache hit (.zarr dir) → loading from {dir_path} ...")
-                        with zarr.DirectoryStore(dir_path) as dir_store:
+                    elif os.path.exists(cache_zarr_path):  # <-- NEW branch
+                        print(f"[RealXArm6ImageDataset] Cache hit (.zarr dir) → loading from {cache_zarr_path} ...")
+                        with zarr.DirectoryStore(cache_zarr_path) as dir_store:
                             replay_buffer = ReplayBuffer.copy_from_store(
                                 src_store=dir_store, store=zarr.MemoryStore()
                             )
