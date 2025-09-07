@@ -162,40 +162,39 @@ class RealXArm6ImageDataset(BaseImageDataset):
 
             print(f"[RealXArm6ImageDataset] Acquiring cache lock: {cache_lock_path}")
             with FileLock(cache_lock_path):
-                with FileLock(cache_lock_path):
-                    if zipped and os.path.exists(cache_zarr_path):
-                        print("[RealXArm6ImageDataset] Cache hit (.zarr.zip) → loading ReplayBuffer from disk...")
-                        with zarr.ZipStore(cache_zarr_path, mode="r") as zip_store:
-                            replay_buffer = ReplayBuffer.copy_from_store(
-                                src_store=zip_store, store=zarr.MemoryStore()
-                            )
-                        print("[RealXArm6ImageDataset] Cache loaded from zip.")
+                if zipped and os.path.exists(cache_zarr_path):
+                    print("[RealXArm6ImageDataset] Cache hit (.zarr.zip) → loading ReplayBuffer from disk...")
+                    with zarr.ZipStore(cache_zarr_path, mode="r") as zip_store:
+                        replay_buffer = ReplayBuffer.copy_from_store(
+                            src_store=zip_store, store=zarr.MemoryStore()
+                        )
+                    print("[RealXArm6ImageDataset] Cache loaded from zip.")
 
-                    elif os.path.exists(cache_zarr_path):  # <-- NEW branch
-                        print(f"[RealXArm6ImageDataset] Cache hit (.zarr dir) → loading from {cache_zarr_path} ...")
-                        with zarr.DirectoryStore(cache_zarr_path) as dir_store:
-                            replay_buffer = ReplayBuffer.copy_from_store(
-                                src_store=dir_store, store=zarr.MemoryStore()
-                            )
-                        print("[RealXArm6ImageDataset] Cache loaded from directory.")
+                elif os.path.exists(cache_zarr_path):  # <-- NEW branch
+                    print(f"[RealXArm6ImageDataset] Cache hit (.zarr dir) → loading from {cache_zarr_path} ...")
+                    with zarr.DirectoryStore(cache_zarr_path) as dir_store:
+                        replay_buffer = ReplayBuffer.copy_from_store(
+                            src_store=dir_store, store=zarr.MemoryStore()
+                        )
+                    print("[RealXArm6ImageDataset] Cache loaded from directory.")
 
-                    else:
-                        print("[RealXArm6ImageDataset] Cache miss → building ReplayBuffer in memory...")
-                        try:
-                            replay_buffer = _get_replay_buffer(
-                                dataset_path=dataset_path,
-                                shape_meta=shape_meta,
-                                store=zarr.MemoryStore(),
-                                camera_res=camera_res
-                            )
-                            print("[RealXArm6ImageDataset] Saving cache to disk...")
-                            with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
-                                replay_buffer.save_to_store(store=zip_store)
-                            print("[RealXArm6ImageDataset] Cache saved.")
-                        except Exception as e:
-                            if os.path.exists(cache_zarr_path):
-                                shutil.rmtree(cache_zarr_path, ignore_errors=True)
-                            raise e
+                else:
+                    print("[RealXArm6ImageDataset] Cache miss → building ReplayBuffer in memory...")
+                    try:
+                        replay_buffer = _get_replay_buffer(
+                            dataset_path=dataset_path,
+                            shape_meta=shape_meta,
+                            store=zarr.MemoryStore(),
+                            camera_res=camera_res
+                        )
+                        print("[RealXArm6ImageDataset] Saving cache to disk...")
+                        with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
+                            replay_buffer.save_to_store(store=zip_store)
+                        print("[RealXArm6ImageDataset] Cache saved.")
+                    except Exception as e:
+                        if os.path.exists(cache_zarr_path):
+                            shutil.rmtree(cache_zarr_path, ignore_errors=True)
+                        raise e
         else:
             replay_buffer = _get_replay_buffer(
                 dataset_path=dataset_path,
