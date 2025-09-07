@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import zarr
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 
-def show_example_images(folder_path: str, idx: int = None):
+def show_example_images(folder_path=".", idx=None):
     """
     Show example wrist and base images from a converted ReplayBuffer.
-    
+
     Args:
         folder_path (str): Path to folder containing the .zarr.zip dataset.
         idx (int, optional): Index of frame to display. If None, selects random frame.
@@ -44,5 +44,5 @@ def show_example_images(folder_path: str, idx: int = None):
     plt.tight_layout()
     plt.show()
 
-# Example usage:
-show_example_images(r"\\wsl.localhost\Ubuntu-22.04\home\d_pad25\Thesis\Data\diffusion_test\image")
+# Example usage
+show_example_images("/home/d_pad25/Thesis/Data/diffusion_test/image")
