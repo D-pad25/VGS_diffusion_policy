@@ -24,7 +24,7 @@ import numpy as np
 import torch
 import dill
 import hydra
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from collections import deque
 from omegaconf import OmegaConf
 
@@ -135,7 +135,7 @@ class _DiffusionPolicyAdapter:
 
 
 class WebsocketPolicyServer:
-    def __init__(self, policy: BaseImagePolicy, n_obs_steps: int, host="127.0.0.1", port=8765, metadata: dict | None = None):
+    def __init__(self, policy: BaseImagePolicy, n_obs_steps: int, host="127.0.0.1", port=8765, metadata: Optional[dict] = None):
         self._policy = policy
         self._n_obs_steps = n_obs_steps
         self._host = host
