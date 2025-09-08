@@ -43,7 +43,7 @@ policy:
       _target_: diffusion_policy.model.vision.model_getter.get_resnet
       name: resnet18
       weights: IMAGENET1K_V1 # or r3m
-    resize_shape: [224, 224]
+    resize_shape: null # Match your downsampled image size
     crop_shape: null  # Match your downsampled image size
     random_crop: False
     use_group_norm: True # Was false
