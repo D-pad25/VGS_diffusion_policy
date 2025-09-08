@@ -32,7 +32,7 @@ import websockets.asyncio.server
 import websockets.frames
 
 # msgpack with numpy support (same as pi0)
-from openpi_client import msgpack_numpy
+import msgpack_numpy
 
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 from diffusion_policy.policy.base_image_policy import BaseImagePolicy
