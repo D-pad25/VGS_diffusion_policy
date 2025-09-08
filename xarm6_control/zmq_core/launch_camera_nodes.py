@@ -4,7 +4,7 @@ from multiprocessing import Process
 import tyro
 
 from xarm6_control.cameras.realsense_camera import RealSenseCamera, get_device_ids
-from camera_node import ZMQServerCamera
+from xarm6_control.zmq_core.camera_node import ZMQServerCamera
 
 
 @dataclass
