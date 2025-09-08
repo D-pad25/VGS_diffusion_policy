@@ -147,8 +147,11 @@ class WebsocketPolicyServer:
         asyncio.run(self.run())
 
     async def run(self):
-        async with websockets.asyncio.server.serve(self._handler, self._host, self._port,
-                                                   compression=None, max_size=None) as server:
+        print(f"[SERVER] Listening on ws://{self._host}:{self._port}")
+        async with websockets.asyncio.server.serve(
+            self._handler, self._host, self._port,
+            compression=None, max_size=None
+        ) as server:
             await server.serve_forever()
 
     async def _handler(self, websocket: websockets.asyncio.server.ServerConnection):
