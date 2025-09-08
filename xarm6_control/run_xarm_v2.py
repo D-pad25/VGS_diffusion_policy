@@ -35,12 +35,29 @@ from typing import Dict, Tuple
 from xarm6_control.xarm_env import XArmRealEnv, MockXArmEnv
 from xarm6_control.zmq_core.camera_node import ZMQClientCamera
 
+import msgpack_numpy
+import asyncio
+import websockets
+
 # try to re-use your pi0 websocket client
-try:
-    from openpi_client import websocket_client_policy
-    _HAS_PI0_CLIENT = True
-except Exception:
-    _HAS_PI0_CLIENT = False
+class WebsocketClientPolicy:
+    """Minimal pi0-like client for our diffusion server."""
+    def __init__(self, host="127.0.0.1", port=8765):
+        self.uri = f"ws://{host}:{port}"
+        self.packer = msgpack_numpy.Packer()
+        # start event loop
+        self.loop = asyncio.get_event_loop()
+        self.connection = self.loop.run_until_complete(websockets.connect(self.uri, max_size=None))
+
+        # read metadata frame
+        meta = self.loop.run_until_complete(self.connection.recv())
+        print(f"[CLIENT] Connected. Metadata: {msgpack_numpy.unpackb(meta)}")
+
+    def infer(self, obs: dict) -> dict:
+        msg = self.packer.pack(obs)
+        self.loop.run_until_complete(self.connection.send(msg))
+        reply = self.loop.run_until_complete(self.connection.recv())
+        return msgpack_numpy.unpackb(reply)
 
 # diffusion policy
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
@@ -177,9 +194,7 @@ def main(
 
     policy_client = None
     if use_remote_policy:
-        if not _HAS_PI0_CLIENT:
-            raise RuntimeError("openpi_client.websocket_client_policy not found. Install pi0 client or set use_remote_policy=False.")
-        policy_client = websocket_client_policy.WebsocketClientPolicy(
+        policy_client = WebsocketClientPolicy(
             host=policy_server_host, port=policy_server_port
         )
         print(f"[REMOTE] Connected to policy server at ws://{policy_server_host}:{policy_server_port}")
