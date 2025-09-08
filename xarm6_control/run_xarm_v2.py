@@ -39,6 +39,18 @@ import msgpack_numpy
 import asyncio
 import websockets
 
+from diffusion_policy.common.cv2_util import get_image_transform
+
+# Image conversion
+img_tf_cache = {}  # (k, in_w,in_h,out_w,out_h) -> callable
+def get_tf(k, in_w, in_h, out_w, out_h):
+    key = (k, in_w, in_h, out_w, out_h)
+    if key not in img_tf_cache:
+        img_tf_cache[key] = get_image_transform(
+            input_res=(in_w, in_h), output_res=(out_w, out_h), bgr_to_rgb=False
+        )
+    return img_tf_cache[key]
+
 # try to re-use your pi0 websocket client
 class WebsocketClientPolicy:
     """Minimal pi0-like client for our diffusion server."""
@@ -152,6 +164,7 @@ class _MockCamera:
 
 def main(
     ckpt: str,
+    use_pad: bool = False,          # whether to use pad/resize (True) or stretch-resize (False)
     remote_host: str = "localhost",
     remote_port: int = 8000,              # your ZMQ camera server (unchanged)
     wrist_camera_port: int = 5000,
@@ -204,6 +217,7 @@ def main(
         print(f"[LOCAL POLICY] Loaded on device: {device}, n_obs_steps={n_obs_steps}")
 
     H = 224; W = 224
+    H_IN = 240; W_IN = 424
     buf = _ObsBuffer(n_obs_steps=n_obs_steps, H=H, W=W)
 
     dt = 1.0 / float(control_hz)
@@ -231,8 +245,13 @@ def main(
         if need_new_chunk:
             if use_remote_policy:
                 # Single-step obs to server; server keeps its own 2-step buffer
-                base_rgb = resize_with_pad(obs["base_rgb"], H, W)
-                wrist_rgb = resize_with_pad(obs["wrist_rgb"], H, W)
+                if use_pad:
+                    base_rgb = resize_with_pad(obs["base_rgb"], H, W)
+                    wrist_rgb = resize_with_pad(obs["wrist_rgb"], H, W)
+                else:
+                    tf = get_tf("rgb", W_IN, H_IN, W, H)
+                    base_rgb = tf(obs["base_rgb"])  # uint8, HxWx3
+                    wrist_rgb = tf(obs["wrist_rgb"])  # uint8, HxWx3
                 observation = {
                     "base_rgb": base_rgb,
                     "wrist_rgb": wrist_rgb,
