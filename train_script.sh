@@ -17,7 +17,7 @@ conda activate robodiff
 source ~/.wandb_secrets
 
 # ─── Point to your dataset ────────────────────────────────────────────────
-export XARM6_DATASET_PATH=/home/n10813934/data/diffusion/converted   # your .zarr cache dir
+export XARM6_DATASET_PATH=/home/n10813934/data/diffusion/converted_padded   # your .zarr cache dir
 export HYDRA_FULL_ERROR=1
 
 # ─── Run diffusion policy training ────────────────────────────────────────
