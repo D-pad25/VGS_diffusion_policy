@@ -74,19 +74,19 @@ python -m xarm6_control.zmq_core.launch_camera_nodes
 #### 1.6 Run the policy.
 
 ##### Available Args
-> - --ckpt: str.
-> - --remote_host: str = "localhost".
-> - --remote_port: int = 8000.           
-> - --wrist_camera_port: int = 5000.
-> - --base_camera_port: int = 5001.
-> - --max_steps: int = 5000.
-> - --prompt: str = "Pick a ripe, red tomato and drop it in the blue bucket.".
-> - --mock: bool = False.
-> - --control_hz: float = 30.0.
-> - --step_through_instructions: bool = False.
-> - --delta_threshold: float = 0.25 # degrees per joint.        
-> - --log_dir: str = os.path.expanduser("~/diffusion_logs").
-> - --save: bool = False.
+> - --ckpt: str
+> - --remote_host: str = "localhost"
+> - --remote_port: int = 8000         
+> - --wrist_camera_port: int = 5000
+> - --base_camera_port: int = 5001
+> - --max_steps: int = 5000
+> - --prompt: str = "Pick a ripe, red tomato and drop it in the blue bucket." # NOT USED YET
+> - --mock: bool = False
+> - --control_hz: float = 30.0
+> - --step_through_instructions: bool = False
+> - --delta_threshold: float = 0.25 # degrees per joint       
+> - --log_dir: str = os.path.expanduser("~/diffusion_logs")
+> - --save: bool = False
 
 ##### If you want to run a mock case
 
