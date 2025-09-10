@@ -135,7 +135,7 @@ def main(
     control_hz: float = 30.0,
     step_through_instructions: bool = False,
     delta_threshold: float = 0.25,        # degrees per joint
-    log_dir: str = os.path.expanduser("~/diffusion_logs"),
+    log_dir: str = "/media/acrv/DanielsSSD/Test_sem2/diffusion",
     save: bool = False,
 ):
     """
