@@ -164,7 +164,7 @@ class _MockCamera:
 
 def main(
     ckpt: str,
-    use_pad: bool = False,          # whether to use pad/resize (True) or stretch-resize (False)
+    use_pad: bool = True,          # whether to use pad/resize (True) or stretch-resize (False)
     remote_host: str = "localhost",
     remote_port: int = 8000,              # your ZMQ camera server (unchanged)
     wrist_camera_port: int = 5000,
@@ -175,7 +175,7 @@ def main(
     control_hz: float = 30.0,
     step_through_instructions: bool = False,
     delta_threshold: float = 0.25,        # degrees per joint
-    log_dir: str = os.path.expanduser("~/diffusion_logs"),
+    log_dir: str = "/media/acrv/DanielsSSD/Test_sem2/diffusion",
     save: bool = False,
 
     # Remote policy settings
