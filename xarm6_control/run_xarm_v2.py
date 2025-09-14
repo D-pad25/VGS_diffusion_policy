@@ -181,7 +181,7 @@ def main(
     # Remote policy settings
     use_remote_policy: bool = False,
     policy_server_host: str = "127.0.0.1",
-    policy_server_port: int = 8765,
+    policy_server_port: int = 8000,
 ):
     # --- Environment & cameras ---
     if mock:
