@@ -250,7 +250,7 @@ class _MockCamera:
         return rgb, depth
 
 def main(
-    ckpt: str,
+    ckpt: str = "DUMMY",
     remote_host: str = "localhost",
     wrist_camera_port: int = 5000,
     base_camera_port: int = 5001,
