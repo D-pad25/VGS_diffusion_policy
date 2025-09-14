@@ -27,7 +27,7 @@ import websockets
 from collections import deque
 from typing import Dict, Tuple, Optional
 
-from xarm6_control.xarm_env import XArmRealEnv, MockXArmEnv
+from xarm6_control.xarm_env import MockXArmEnv
 from xarm6_control.zmq_core.camera_node import ZMQClientCamera
 
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
@@ -276,6 +276,7 @@ def main(
         camera_clients = {"wrist": _MockCamera(), "base": _MockCamera()}
         env = MockXArmEnv(camera_dict=camera_clients)
     else:
+        from xarm6_control.xarm_env import XArmRealEnv
         camera_clients = {
             "wrist": ZMQClientCamera(port=wrist_camera_port, host=remote_host),
             "base":  ZMQClientCamera(port=base_camera_port,  host=remote_host),
