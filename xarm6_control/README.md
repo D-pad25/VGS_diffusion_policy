@@ -105,3 +105,48 @@ python -m xarm6_control.run_xarm --ckpt "$CKPT" --step_through_instructions
 ```bash
 python -m xarm6_control.run_xarm --ckpt "$CKPT"
 ```
+
+## Running Inference via server
+### Step 1 - set checkpoint path
+```bash
+export CKPT="/mnt/hpccs01/home/n10813934/gitRepos/VGS_diffusion_policy/data/outputs/2025.09.08/22.12.28_train_xarm6_diffusion_unet_real_pretrained_workspace_real_xarm_image/checkpoints/epoch=0020-val_loss=0.011.ckpt"
+echo "$CKPT"
+```
+
+### Step 2 - run the server
+Note: the --perf provides inference timestamps (exclude to remove)
+```bash
+python -m xarm6_control.serve_diffusion_v2 --ckpt "$CKPT" --perf
+```
+
+### Step 3 - set up an ssh tunnel:
+```bash
+ssh -L 8000:10.13.22.1:8000 n10813934@aqua.qut.edu.au
+```
+
+### Step 4 - set up the gripper and camera clients (refer to above)
+
+### Step 5 - run the client node ():
+```bash
+python -m xarm6_control.run_xarm_async --use_remote_policy --step_through_instructions
+```
+
+## Evaluation
+If you would like to evaluate the effectivness of the robot against a recorded trajectory, run the following script:
+
+### Step 1 - set checkpoint path
+```bash
+export CKPT="/mnt/hpccs01/home/n10813934/gitRepos/VGS_diffusion_policy/data/outputs/2025.09.08/22.12.28_train_xarm6_diffusion_unet_real_pretrained_workspace_real_xarm_image/checkpoints/epoch=0020-val_loss=0.011.ckpt"
+echo "$CKPT"
+```
+
+```bash
+python -m xarm6_control.eval_ablation \
+  --ckpt "$CKPT" \
+  --episode_dir /home/n10813934/data/0828_173511 \
+  --out_dir ~/diff_eval/eval_ablation/out_epoch20_$(date +%F_%H-%M) \
+  --num_inference_steps 6 8 12 16 \
+  --jpeg_qualities 0 95 85 75 \
+  --compress_before_resize \
+  --use_amp
+  ```
