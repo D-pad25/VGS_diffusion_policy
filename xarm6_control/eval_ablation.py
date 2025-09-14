@@ -409,4 +409,5 @@ def main(args: Args):
 
 if __name__ == "__main__":
     import tyro
-    tyro.cli(Args).call(main)
+    args = tyro.cli(Args)
+    main(args)
