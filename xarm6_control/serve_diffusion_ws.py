@@ -177,7 +177,7 @@ class WebsocketPolicyServer:
                 raise
 
 
-def main(ckpt: str, host: str = "127.0.0.1", port: int = 8765, image_size: int = 224):
+def main(ckpt: str, host: str = "0.0.0.0", port: int = 8000, image_size: int = 224):
     policy, cfg, n_obs_steps = _load_diffusion_policy(ckpt)
     print(f"[SERVER] Loaded policy on {next(policy.parameters()).device}; n_obs_steps={n_obs_steps}")
     meta = {"model": getattr(cfg, "name", "diffusion"), "n_obs_steps": n_obs_steps, "image_size": image_size}
@@ -192,8 +192,8 @@ if __name__ == "__main__":
         import argparse
         p = argparse.ArgumentParser()
         p.add_argument("--ckpt", required=True)
-        p.add_argument("--host", default="127.0.0.1")
-        p.add_argument("--port", type=int, default=8765)
+        p.add_argument("--host", default="0.0.0.0")
+        p.add_argument("--port", type=int, default=8000)
         p.add_argument("--image_size", type=int, default=224)
         args = p.parse_args()
         main(**vars(args))
