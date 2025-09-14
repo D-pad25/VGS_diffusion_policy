@@ -450,16 +450,16 @@ def main(
             continue
 
         # Non step-through
-        if np.any(np.abs(delta_deg) > delta_threshold):
-            state = np.concatenate([obs["joint_position"], obs["gripper_position"]])
-            interp = env.generate_joint_trajectory(state, action, delta_threshold * math.pi / 180.0)
-            obs = env.step_through_interpolated_trajectory(
-                interp, obs, step_idx, log_dir, control_hz, step_through_instructions, save
-            )
-        else:
-            if save: env.save_step_data(log_dir, step_idx, copy.deepcopy(obs), action)
-            env.step(np.array(action))
-
+        # if np.any(np.abs(delta_deg) > delta_threshold):
+        #     state = np.concatenate([obs["joint_position"], obs["gripper_position"]])
+        #     interp = env.generate_joint_trajectory(state, action, delta_threshold * math.pi / 180.0)
+        #     obs = env.step_through_interpolated_trajectory(
+        #         interp, obs, step_idx, log_dir, control_hz, step_through_instructions, save
+        #     )
+        # else:
+        #     if save: env.save_step_data(log_dir, step_idx, copy.deepcopy(obs), action)
+        #     env.step(np.array(action))
+        env.step(np.array(action))
         # Keep control rate
         elapsed = time.time() - loop_t0
         if elapsed < dt:
