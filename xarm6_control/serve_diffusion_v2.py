@@ -41,6 +41,7 @@ import time
 from typing import Dict, Tuple, Optional
 from collections import deque
 
+import cv2
 import numpy as np
 import torch
 import dill
@@ -57,7 +58,7 @@ from diffusion_policy.workspace.base_workspace import BaseWorkspace
 from diffusion_policy.policy.base_image_policy import BaseImagePolicy
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
-
+cv2.setNumThreads(1)
 
 def _resize_with_pad(img_hwc_uint8: np.ndarray, H: int = 224, W: int = 224) -> np.ndarray:
     import cv2
@@ -259,19 +260,37 @@ class WebsocketPolicyServer:
             try:
                 t0 = time.perf_counter()
                 raw = await websocket.recv()
-                obs = msgpack_numpy.unpackb(raw)
+
                 t1 = time.perf_counter()
+                obs = msgpack_numpy.unpackb(raw)
+                
+                t2 = time.perf_counter()
+                # Convert JPEG if needed
+                if "base_jpeg" in obs:
+                    base_bgr  = cv2.imdecode(np.frombuffer(obs["base_jpeg"],  np.uint8), cv2.IMREAD_COLOR)
+                    wrist_bgr = cv2.imdecode(np.frombuffer(obs["wrist_jpeg"], np.uint8), cv2.IMREAD_COLOR)
+                    obs["base_rgb"]  = cv2.cvtColor(base_bgr,  cv2.COLOR_BGR2RGB)
+                    obs["wrist_rgb"] = cv2.cvtColor(wrist_bgr, cv2.COLOR_BGR2RGB)
+                t3 = time.perf_counter()
 
                 out = adapter.infer(obs)
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
-                t2 = time.perf_counter()
 
+                t4 = time.perf_counter()
                 await websocket.send(packer.pack(out))
-                t3 = time.perf_counter()
+                t5 = time.perf_counter()
 
+                # if self._perf:
+                #     print(f"[PERF] recv={(t1-t0)*1e3:.1f}ms  infer={(t2-t1)*1e3:.1f}ms  send={(t3-t2)*1e3:.1f}ms")
                 if self._perf:
-                    print(f"[PERF] recv={(t1-t0)*1e3:.1f}ms  infer={(t2-t1)*1e3:.1f}ms  send={(t3-t2)*1e3:.1f}ms")
+                    print(
+                        f"[PERF] wire={(t1-t0)*1e3:.1f}ms "
+                        f"unpack={(t2-t1)*1e3:.1f}ms "
+                        f"decode={(t3-t2)*1e3:.1f}ms "
+                        f"infer={(t4-t3)*1e3:.1f}ms "
+                        f"send={(t5-t4)*1e3:.1f}ms"
+                    )
             except websockets.ConnectionClosed:
                 logging.info(f"Connection from {websocket.remote_address} closed")
                 break

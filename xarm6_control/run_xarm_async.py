@@ -21,7 +21,7 @@ Usage:
       --policy_server_host 127.0.0.1 --policy_server_port 8765 --mock False
 """
 import os, time, copy, math, threading, queue, asyncio
-import tyro, torch, dill, hydra, numpy as np
+import tyro, torch, dill, hydra, cv2, numpy as np
 import msgpack_numpy
 import websockets
 from collections import deque
@@ -179,22 +179,29 @@ class RemotePolicyWorker(threading.Thread):
                  in_q: "queue.Queue[Tuple[int, Dict]]",
                  out_q: "queue.Queue[Tuple[int, np.ndarray]]",
                  stop_evt: threading.Event,
-                 prompt: Optional[str] = None):
+                 prompt: Optional[str] = None,
+                 image_encoding: str = "jpeg",
+                 jpeg_quality: int = 85,
+                 ws_compress: bool = True):
         super().__init__(daemon=True)
         self.uri = f"ws://{host}:{port}"
         self.H, self.W = H, W
         self.in_q = in_q
         self.out_q = out_q
         self.stop_evt = stop_evt
-        self.packer = msgpack_numpy.Packer()
+        self.packer = msgpack_numpy.Packer(use_bin_type=True)
         self.prompt = prompt
+        self.image_encoding = image_encoding
+        self.jpeg_quality = int(jpeg_quality)
+        self.ws_compress = ws_compress
 
     def run(self):
         asyncio.run(self._loop())
 
     async def _loop(self):
         try:
-            async with websockets.connect(self.uri, max_size=None) as ws:
+            comp = "deflate" if self.ws_compress else None
+            async with websockets.connect(self.uri, max_size=None, compression=comp) as ws:
                 # Try to read metadata frame (non-fatal)
                 try:
                     meta = await asyncio.wait_for(ws.recv(), timeout=3.0)
@@ -215,12 +222,26 @@ class RemotePolicyWorker(threading.Thread):
                     try:
                         base = resize_with_pad(obs["base_rgb"], self.H, self.W)
                         wrist = resize_with_pad(obs["wrist_rgb"], self.H, self.W)
-                        msg = {
-                            "base_rgb": base,                # HxWx3 uint8
-                            "wrist_rgb": wrist,              # HxWx3 uint8
-                            "joint_position": obs["joint_position"].astype(np.float32),
-                            "gripper_position": obs["gripper_position"].astype(np.float32),
-                        }
+                        if self.image_encoding == "jpeg":
+                            base_bgr  = cv2.cvtColor(base,  cv2.COLOR_RGB2BGR)
+                            wrist_bgr = cv2.cvtColor(wrist, cv2.COLOR_RGB2BGR)
+                            ok1, b1 = cv2.imencode(".jpg", base_bgr,  [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality])
+                            ok2, b2 = cv2.imencode(".jpg", wrist_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality])
+                            if not (ok1 and ok2): 
+                                continue
+                            msg = {
+                                "base_jpeg": b1.tobytes(),
+                                "wrist_jpeg": b2.tobytes(),
+                                "joint_position": obs["joint_position"].astype(np.float32),
+                                "gripper_position": obs["gripper_position"].astype(np.float32),
+                            }
+                        else:
+                            msg = {
+                                "base_rgb": base,                # HxWx3 uint8
+                                "wrist_rgb": wrist,              # HxWx3 uint8
+                                "joint_position": obs["joint_position"].astype(np.float32),
+                                "gripper_position": obs["gripper_position"].astype(np.float32),
+                            }
                         if self.prompt:
                             msg["prompt"] = self.prompt
                     except KeyError as e:
