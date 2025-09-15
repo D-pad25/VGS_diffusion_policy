@@ -138,14 +138,14 @@ class RealXArm6LowdimDataset(BaseImageDataset):
                 if not os.path.exists(cache_zarr_path):
                     try:
                         print("[RealXArm6ImageDataset] Cache miss → building ReplayBuffer in memory...")
-                        replay_buffer = _get_replay_buffer_lowdim(
-                            dataset_path=dataset_path,
-                            shape_meta=shape_meta,
-                            store=zarr.MemoryStore(),
-                        )
-                        print("[RealXArm6ImageDataset] Saving cache to disk...")
-                        with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
-                            replay_buffer.save_to_store(store=zip_store)
+                        # replay_buffer = _get_replay_buffer_lowdim(
+                        #     dataset_path=dataset_path,
+                        #     shape_meta=shape_meta,
+                        #     store=zarr.MemoryStore(),
+                        # )
+                        # print("[RealXArm6ImageDataset] Saving cache to disk...")
+                        # with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
+                        #     replay_buffer.save_to_store(store=zip_store)
                         print("[RealXArm6ImageDataset] Cache saved.")
                     except Exception as e:
                         if os.path.exists(cache_zarr_path):
