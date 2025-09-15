@@ -3,6 +3,7 @@ name: real_xarm_lowdim
 
 ## HPC ##
 dataset_path: /home/n10813934/data/diffusion/converted_padded     # path to the root of your dataset (episodes directories)
+zarr_cache_path: /home/n10813934/data/diffusion/converted_padded/93aacbb843da37ac6da4922061c722db.zarr.zip  # path to your precomputed zarr cache file (optional)
 
 shape_meta: &shape_meta
   obs:
@@ -32,6 +33,8 @@ dataset:
   val_ratio: 0.1
   max_train_episodes: null
   delta_action: False
+  zarr_cache_provided: True
+  zarr_cache_path_provided: ${task.zarr_cache_path}
 
 obs_dim: 7
 action_dim: 7

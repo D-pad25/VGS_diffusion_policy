@@ -47,17 +47,6 @@ def _get_replay_buffer_lowdim(
     shape_meta: dict,
     store: zarr.storage.BaseStore,
 ) -> ReplayBuffer:
-    if os.path.isdir(dataset_path):
-        entries = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path)]
-        zips = [p for p in entries if p.endswith(".zarr.zip")]
-        if zips:
-            zips.sort(key=os.path.getmtime, reverse=True)  # newest first
-            with zarr.ZipStore(zips[0], mode="r") as zs:
-                rb = ReplayBuffer.copy_from_store(src_store=zs, store=zarr.MemoryStore())
-            for k in list(rb.keys()):
-                if k.endswith("_rgb"):
-                    del rb[k]
-            return rb
     """Build a ReplayBuffer from real data (low-dim only, no images)."""
     # parse obs keys from shape_meta
     lowdim_keys: List[str] = []
@@ -118,19 +107,27 @@ class RealXArm6LowdimDataset(BaseImageDataset):
         max_train_episodes: Optional[int] = None,
         delta_action: bool = False,
         delta_exclude_gripper: bool = True,
+        zarr_cache_provided: bool = False,
+        zarr_cache_path_provided: Optional[str] = None,
     ) -> None:
-        assert os.path.isdir(dataset_path), f"dataset_path not found: {dataset_path}"
+        assert os.path.isdir(dataset_path) or (
+            zarr_cache_provided and zarr_cache_path_provided is not None and os.path.isfile(zarr_cache_path_provided)
+        ), f"dataset_path not found: {dataset_path}"
         
         # fingerprint (match style of image dataset; add a 'kind' so caches don't collide)
-        fp = {
-            "kind": "lowdim_only",
-            "shape_meta": OmegaConf.to_container(shape_meta)
-        }
-        fp_json = json.dumps(fp, sort_keys=True)
-        fp_hash = hashlib.md5(fp_json.encode("utf-8")).hexdigest()
+        if zarr_cache_provided:
+            assert zarr_cache_path_provided is not None, "Must provide zarr_cache_path_provided when zarr_cache_provided=True"
+            cache_zarr_path = zarr_cache_path_provided
+        else:
+            fp = {
+                "kind": "lowdim_only",
+                "shape_meta": OmegaConf.to_container(shape_meta)
+            }
+            fp_json = json.dumps(fp, sort_keys=True)
+            fp_hash = hashlib.md5(fp_json.encode("utf-8")).hexdigest()
 
-        target_dir = out_dir if out_dir is not None else dataset_path
-        cache_zarr_path = os.path.join(target_dir, f"{fp_hash}.zarr.zip")
+            target_dir = out_dir if out_dir is not None else dataset_path
+            cache_zarr_path = os.path.join(target_dir, f"{fp_hash}.zarr.zip")
         cache_lock_path = cache_zarr_path + ".lock"
 
         # Build or load cache (identical flow)
