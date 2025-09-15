@@ -1,30 +1,28 @@
 """
 RealXArm6LowdimDataset
 ----------------------
-Low-dim–only dataset for Daniel's xArm6 setup.
-Loads ONLY 'robot_state' (+ 'action') from converted episodes; completely
-skips image decode to minimize CPU RAM and dataloader overhead.
+Same behavior as RealXArm6ImageDataset, but loads ONLY low-dim fields (e.g., 'robot_state')
+and 'action'. No image decoding; caching still uses a zipped zarr with a fingerprint.
 
-Assumptions
-- Converted episodes produced by:
-    diffusion_policy.real_world.real_xarm6_data_conversion.real_data_to_replay_buffer
-- Keys present in the converted store:
-    - 'robot_state': (T, 7) float32  # [j1..j6, gripper]
-    - 'action'     : (T, 7) float32
-    - 'episode_ends': (E,) int64  (cumulative T)
-- Units: whatever your logger used (deg/rad). Normalizer will scale properly.
+Assumptions (same as image variant, minus images):
+- Raw episodes are converted via real_data_to_replay_buffer into a ReplayBuffer with keys:
+    - 'robot_state' : (T, 7) float32
+    - 'action'      : (T, 7) float32
+    - 'episode_ends': (E,) int64
+- Units: whatever your logger uses (deg/rad); normalizer will scale appropriately.
 """
 
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 import os, json, hashlib, shutil, copy
+
 import numpy as np
 import torch, zarr
 from filelock import FileLock
 from threadpoolctl import threadpool_limits
 from omegaconf import OmegaConf
 
-from diffusion_policy.dataset.base_dataset import BaseImageDataset
 from diffusion_policy.common.pytorch_util import dict_apply
+from diffusion_policy.dataset.base_dataset import BaseImageDataset
 from diffusion_policy.model.common.normalizer import (
     LinearNormalizer, SingleFieldLinearNormalizer
 )
@@ -35,60 +33,69 @@ from diffusion_policy.common.sampler import (
 from diffusion_policy.real_world.real_xarm6_data_conversion import real_data_to_replay_buffer
 
 
-def _build_lowdim_replay_buffer(
+def _zarr_resize_index_last_dim(zarr_arr, idxs: List[int]):
+    """In-place slice on last dimension of a zarr array and resize storage."""
+    data = zarr_arr[:]
+    data = data[..., idxs]
+    zarr_arr.resize(zarr_arr.shape[:-1] + (len(idxs),))
+    zarr_arr[:] = data
+    return zarr_arr
+
+
+def _get_replay_buffer_lowdim(
     dataset_path: str,
-    lowdim_keys: List[str],
-    action_shape: tuple,
+    shape_meta: dict,
     store: zarr.storage.BaseStore,
 ) -> ReplayBuffer:
-    """Create a ReplayBuffer with ONLY low-dim keys + action (no images)."""
-    # No image keys, no resize, just ingest low-dim fields and action
+    """Build a ReplayBuffer from real data (low-dim only, no images)."""
+    # parse obs keys from shape_meta
+    lowdim_keys: List[str] = []
+    obs_shape_meta = shape_meta["obs"]
+    for key, attr in obs_shape_meta.items():
+        if attr.get("type", "low_dim") == "low_dim":
+            lowdim_keys.append(key)
+
+    action_shape = tuple(shape_meta["action"]["shape"])
+    assert action_shape in [(2,), (6,), (7,)], f"Unexpected action shape: {action_shape}"
+
+    # build from raw episodes (no images)
     with threadpool_limits(1):
         rb = real_data_to_replay_buffer(
             dataset_path=dataset_path,
             out_store=store,
-            out_resolutions={},                 # no images → no resizing
+            out_resolutions={},              # no image resize
             lowdim_keys=lowdim_keys + ["action"],
-            image_keys=[],                      # critical: skip image decode
+            image_keys=[],                   # critical: skip image decode
         )
 
-    # Sanity slice actions if larger than expected (keep first N)
-    if action_shape in [(2,), (6,), (7,)]:
-        want = action_shape[-1]
-        if rb["action"].shape[-1] > want:
-            _zarr_slice_last_dim_(rb["action"], list(range(want)))
-    else:
-        raise AssertionError(f"Unexpected action shape: {action_shape}")
+    # optional slicing if larger than expected
+    if action_shape == (2,):
+        _zarr_resize_index_last_dim(rb["action"], [0, 1])
+    elif action_shape == (6,):
+        _zarr_resize_index_last_dim(rb["action"], [0, 1, 2, 3, 4, 5])
 
-    # Example: if robot_state ended up >7 dims, keep first 7
-    if "robot_state" in rb and rb["robot_state"].shape[-1] > 7:
-        _zarr_slice_last_dim_(rb["robot_state"], list(range(7)))
+    for key in lowdim_keys:
+        shp = tuple(obs_shape_meta[key].get("shape"))
+        if rb[key].shape[-1] > shp[-1]:
+            _zarr_resize_index_last_dim(rb[key], list(range(shp[-1])))
 
     return rb
 
 
-def _zarr_slice_last_dim_(zarr_arr, idxs: List[int]):
-    arr = zarr_arr[:]
-    arr = arr[..., idxs]
-    zarr_arr.resize(zarr_arr.shape[:-1] + (len(idxs),))
-    zarr_arr[:] = arr
-    return zarr_arr
-
-
 class RealXArm6LowdimDataset(BaseImageDataset):
     """
-    Low-dim dataset for Diffusion Policy on xArm6 (no images).
+    Low-dim only dataset for Diffusion Policy (mirrors RealXArm6ImageDataset behavior).
     Features:
-      - zipped zarr caching (separate fingerprint from image dataset)
-      - optional delta-action (with gripper include/exclude)
-      - episode-level train/val split
+      - zipped zarr cache keyed by shape_meta (same style)
+      - optional delta-action (with option to exclude gripper)
+      - episode-level train/val split + sampler
       - latency support
     """
     def __init__(
         self,
         shape_meta: dict,
         dataset_path: str,
-        out_dir: Optional[str] = None,          # where to store cache (defaults to dataset_path)
+        out_dir: Optional[str] = None,
         horizon: int = 16,
         pad_before: int = 0,
         pad_after: int = 0,
@@ -103,85 +110,90 @@ class RealXArm6LowdimDataset(BaseImageDataset):
     ) -> None:
         assert os.path.isdir(dataset_path), f"dataset_path not found: {dataset_path}"
 
-        # Parse low-dim keys from shape_meta (ignore any 'rgb' entries)
-        obs_sm = shape_meta["obs"]
-        lowdim_keys, lowdim_shapes = [], {}
-        for k, a in obs_sm.items():
-            if a.get("type", "low_dim") == "low_dim":
-                lowdim_keys.append(k)
-                lowdim_shapes[k] = tuple(a.get("shape"))
-        action_shape = tuple(shape_meta["action"]["shape"])
+        # fingerprint (match style of image dataset; add a 'kind' so caches don't collide)
+        fp = {
+            "kind": "lowdim_only",
+            "shape_meta": OmegaConf.to_container(shape_meta)
+        }
+        fp_json = json.dumps(fp, sort_keys=True)
+        fp_hash = hashlib.md5(fp_json.encode("utf-8")).hexdigest()
 
-        # Build or load cache
-        rb: Optional[ReplayBuffer] = None
+        target_dir = out_dir if out_dir is not None else dataset_path
+        cache_zarr_path = os.path.join(target_dir, f"{fp_hash}.zarr.zip")
+        cache_lock_path = cache_zarr_path + ".lock"
+
+        # Build or load cache (identical flow)
+        replay_buffer: Optional[ReplayBuffer] = None
         if use_cache:
-            fp = {
-                "kind": "lowdim_only",
-                "shape_meta": OmegaConf.to_container(shape_meta),
-            }
-            fp_json = json.dumps(fp, sort_keys=True)
-            fp_hash = hashlib.md5(fp_json.encode("utf-8")).hexdigest()
-            target_dir = out_dir if out_dir is not None else dataset_path
-            cache_path = os.path.join(target_dir, f"{fp_hash}.zarr.zip")
-            lock_path = cache_path + ".lock"
-            with FileLock(lock_path):
-                if not os.path.exists(cache_path):
+            with FileLock(cache_lock_path):
+                if not os.path.exists(cache_zarr_path):
                     try:
-                        rb = _build_lowdim_replay_buffer(
+                        replay_buffer = _get_replay_buffer_lowdim(
                             dataset_path=dataset_path,
-                            lowdim_keys=lowdim_keys,
-                            action_shape=action_shape,
+                            shape_meta=shape_meta,
                             store=zarr.MemoryStore(),
                         )
-                        with zarr.ZipStore(cache_path, mode="w") as zs:
-                            rb.save_to_store(store=zs)
-                    except Exception:
-                        if os.path.exists(cache_path):
-                            shutil.rmtree(cache_path, ignore_errors=True)
-                        raise
+                        with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
+                            replay_buffer.save_to_store(store=zip_store)
+                    except Exception as e:
+                        if os.path.exists(cache_zarr_path):
+                            shutil.rmtree(cache_zarr_path, ignore_errors=True)
+                        raise e
                 else:
-                    with zarr.ZipStore(cache_path, mode="r") as zs:
-                        rb = ReplayBuffer.copy_from_store(src_store=zs, store=zarr.MemoryStore())
+                    with zarr.ZipStore(cache_zarr_path, mode="r") as zip_store:
+                        replay_buffer = ReplayBuffer.copy_from_store(
+                            src_store=zip_store, store=zarr.MemoryStore()
+                        )
         else:
-            rb = _build_lowdim_replay_buffer(
+            replay_buffer = _get_replay_buffer_lowdim(
                 dataset_path=dataset_path,
-                lowdim_keys=lowdim_keys,
-                action_shape=action_shape,
+                shape_meta=shape_meta,
                 store=zarr.MemoryStore(),
             )
-        assert rb is not None, "ReplayBuffer creation failed."
 
-        # Optional: convert to delta actions (default excludes gripper index 6)
+        assert replay_buffer is not None
+
+        # Optional: convert to delta actions (exclude gripper by default)
         if delta_action:
-            acts = rb["action"][:]
-            n_dim = acts.shape[1]
-            episode_ends = rb.episode_ends[:]
-            acts_diff = np.zeros_like(acts)
+            actions = replay_buffer["action"][:]
+            n_dim = actions.shape[1]
+            episode_ends = replay_buffer.episode_ends[:]
+            actions_diff = np.zeros_like(actions)
             if delta_exclude_gripper and n_dim == 7:
                 delta_idxs = list(range(6))
             else:
                 delta_idxs = list(range(n_dim))
+
             for epi, end in enumerate(episode_ends):
                 start = 0 if epi == 0 else episode_ends[epi - 1]
-                seg = acts[start:end]
+                seg = actions[start:end]
                 d = np.diff(seg, axis=0, prepend=seg[0:1])
-                acts_diff[start:end, delta_idxs] = d[:, delta_idxs]
+                actions_diff[start:end, delta_idxs] = d[:, delta_idxs]
                 if delta_exclude_gripper and n_dim == 7:
-                    acts_diff[start:end, 6] = seg[:, 6]
-            rb["action"][:] = acts_diff
+                    actions_diff[start:end, 6] = seg[:, 6]
 
-        # Build sampler (episode-level split)
+            replay_buffer["action"][:] = actions_diff
+
+        # parse keys
+        lowdim_keys: List[str] = []
+        for key, attr in shape_meta["obs"].items():
+            if attr.get("type", "low_dim") == "low_dim":
+                lowdim_keys.append(key)
+
         key_first_k = {}
         if n_obs_steps is not None:
-            for k in lowdim_keys:
-                key_first_k[k] = n_obs_steps
+            for key in lowdim_keys:
+                key_first_k[key] = n_obs_steps
 
-        val_mask = get_val_mask(n_episodes=rb.n_episodes, val_ratio=val_ratio, seed=seed)
+        # Split and sampler (same as image dataset)
+        val_mask = get_val_mask(
+            n_episodes=replay_buffer.n_episodes, val_ratio=val_ratio, seed=seed
+        )
         train_mask = ~val_mask
         train_mask = downsample_mask(mask=train_mask, max_n=max_train_episodes, seed=seed)
 
         sampler = SequenceSampler(
-            replay_buffer=rb,
+            replay_buffer=replay_buffer,
             sequence_length=horizon + n_latency_steps,
             pad_before=pad_before,
             pad_after=pad_after,
@@ -190,7 +202,7 @@ class RealXArm6LowdimDataset(BaseImageDataset):
         )
 
         # Expose
-        self.replay_buffer = rb
+        self.replay_buffer = replay_buffer
         self.sampler = sampler
         self.shape_meta = shape_meta
         self.lowdim_keys = lowdim_keys
@@ -201,7 +213,7 @@ class RealXArm6LowdimDataset(BaseImageDataset):
         self.pad_before = pad_before
         self.pad_after = pad_after
 
-    # ---------- Public API ----------
+    # -------------------- Public API --------------------
     def get_validation_dataset(self):
         val_set = copy.copy(self)
         val_set.sampler = SequenceSampler(
@@ -215,11 +227,15 @@ class RealXArm6LowdimDataset(BaseImageDataset):
         return val_set
 
     def get_normalizer(self, **kwargs) -> LinearNormalizer:
-        norm = LinearNormalizer()
-        norm["action"] = SingleFieldLinearNormalizer.create_fit(self.replay_buffer["action"])
-        for k in self.lowdim_keys:
-            norm[k] = SingleFieldLinearNormalizer.create_fit(self.replay_buffer[k])
-        return norm
+        normalizer = LinearNormalizer()
+        normalizer["action"] = SingleFieldLinearNormalizer.create_fit(
+            self.replay_buffer["action"]
+        )
+        for key in self.lowdim_keys:
+            normalizer[key] = SingleFieldLinearNormalizer.create_fit(
+                self.replay_buffer[key]
+            )
+        return normalizer
 
     def get_all_actions(self) -> torch.Tensor:
         return torch.from_numpy(self.replay_buffer["action"])
@@ -231,19 +247,17 @@ class RealXArm6LowdimDataset(BaseImageDataset):
         threadpool_limits(1)
         data = self.sampler.sample_sequence(idx)
 
-        # Only keep first n_obs_steps of obs (if set)
-        T = slice(self.n_obs_steps)
+        T_slice = slice(self.n_obs_steps)
+        obs_dict = {}
+        for key in self.lowdim_keys:
+            obs_dict[key] = data[key][T_slice].astype(np.float32)
+            del data[key]
 
-        obs = {}
-        for k in self.lowdim_keys:
-            obs[k] = data[k][T].astype(np.float32)
-            del data[k]
-
-        act = data["action"].astype(np.float32)
+        action = data["action"].astype(np.float32)
         if self.n_latency_steps > 0:
-            act = act[self.n_latency_steps:]
+            action = action[self.n_latency_steps:]
 
         return {
-            "obs": dict_apply(obs, torch.from_numpy),
-            "action": torch.from_numpy(act),
+            "obs": dict_apply(obs_dict, torch.from_numpy),
+            "action": torch.from_numpy(action),
         }
