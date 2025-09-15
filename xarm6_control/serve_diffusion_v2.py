@@ -132,6 +132,25 @@ class _ObsBuffer:
         state = state.to(device, non_blocking=pin)
         return {"base_rgb": base, "wrist_rgb": wrist, "robot_state": state}
 
+    def snapshot_np(self) -> Dict[str, np.ndarray]:
+        """Return stacked numpy views for logging: base/wrist (T,3,H,W), state (T,7)."""
+        base  = np.stack(list(self.base_rgb), axis=0).astype(np.float32)   # (T,3,H,W) in [0,1]
+        wrist = np.stack(list(self.wrist_rgb), axis=0).astype(np.float32)  # (T,3,H,W)
+        state = np.stack(list(self.robot_state), axis=0).astype(np.float32)  # (T,7)
+        return {"base_rgb": base, "wrist_rgb": wrist, "robot_state": state}
+
+    def debug_print(self, prefix: str = "OBSBUF") -> None:
+        snap = self.snapshot_np()
+        T = snap["base_rgb"].shape[0]
+        print(f"[{prefix}] ready={self.ready()} T={T} "
+              f"base{snap['base_rgb'].shape} wrist{snap['wrist_rgb'].shape} state{snap['robot_state'].shape}")
+        for t in range(T):
+            b = snap["base_rgb"][t]; w = snap["wrist_rgb"][t]; s = snap["robot_state"][t]
+            print(f"[{prefix}] t={t} "
+                  f"base[min={b.min():.3f}, max={b.max():.3f}] "
+                  f"wrist[min={w.min():.3f}, max={w.max():.3f}] "
+                  f"state={np.array2string(s, precision=3, floatmode='fixed')}")
+
 
 def _extract_actions(result: Dict) -> torch.Tensor:
     a = result.get("action", result.get("action_pred"))
@@ -192,14 +211,21 @@ def _load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int]:
 
 class _DiffusionPolicyAdapter:
     """pi0-like interface: .infer(obs) -> {'actions': ndarray(T,7)}"""
-    def __init__(self, policy: BaseImagePolicy, n_obs_steps: int, H: int = 224, W: int = 224):
+    def __init__(self, policy: BaseImagePolicy, n_obs_steps: int, H: int = 224, W: int = 224, debug_obs: bool = False):
         self.policy = policy
         self.device = next(policy.parameters()).device
         self.buf = _ObsBuffer(n_obs_steps=n_obs_steps, H=H, W=W)
+        self.debug_obs = debug_obs
 
     @torch.inference_mode()
     def infer(self, obs: Dict) -> Dict:
         self.buf.push_single(obs)
+
+        # Print debug info if requested
+        if self.debug_obs:
+            self.buf.debug_print()
+
+        
         if not self.buf.ready():
             return {"actions": np.empty((0, 7), dtype=np.float32)}  # warm-up returns empty
         model_obs = self.buf.as_torch(self.device)
@@ -224,7 +250,8 @@ class WebsocketPolicyServer:
         port: int = 8000,
         image_size: int = 224,
         metadata: Optional[dict] = None,
-        perf: bool = False
+        perf: bool = False,
+        debug_obs: bool = False
     ):
         self._policy = policy
         self._n_obs_steps = n_obs_steps
@@ -233,6 +260,7 @@ class WebsocketPolicyServer:
         self._image_size = image_size
         self._metadata = metadata or {}
         self._perf = perf
+        self._debug_obs = debug_obs
         logging.getLogger("websockets.server").setLevel(logging.INFO)
 
     def serve_forever(self) -> None:
@@ -255,7 +283,8 @@ class WebsocketPolicyServer:
         # Adapter/buffer PER CONNECTION; use configured image_size
         adapter = _DiffusionPolicyAdapter(
             self._policy, n_obs_steps=self._n_obs_steps,
-            H=self._image_size, W=self._image_size
+            H=self._image_size, W=self._image_size,
+            debug_obs=self._debug_obs 
         )
 
         while True:
@@ -308,7 +337,8 @@ class WebsocketPolicyServer:
                     raise
 
 
-def main(ckpt: str, host: str = "0.0.0.0", port: int = 8000, image_size: int = 224, perf: bool = False):
+def main(ckpt: str, host: str = "0.0.0.0", port: int = 8000, 
+         image_size: int = 224, perf: bool = False, debug_obs: bool = False):
     policy, cfg, n_obs_steps = _load_diffusion_policy(ckpt)
     device = next(policy.parameters()).device
     print(f"[SERVER] Loaded policy on {device}; n_obs_steps={n_obs_steps}")
@@ -333,7 +363,7 @@ def main(ckpt: str, host: str = "0.0.0.0", port: int = 8000, image_size: int = 2
     }
     WebsocketPolicyServer(
         policy, n_obs_steps=n_obs_steps, host=host, port=port,
-        image_size=image_size, metadata=meta, perf=perf
+        image_size=image_size, metadata=meta, perf=perf, debug_obs=debug_obs
     ).serve_forever()
 
 
@@ -349,5 +379,6 @@ if __name__ == "__main__":
         p.add_argument("--port", type=int, default=8000)
         p.add_argument("--image_size", type=int, default=224)
         p.add_argument("--perf", action="store_true")
+        p.add_argument("--debug_obs", action="store_true")
         args = p.parse_args()
         main(**vars(args))
