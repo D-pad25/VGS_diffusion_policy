@@ -3,20 +3,15 @@ RealXArm6LowdimDataset
 ----------------------
 Same behavior as RealXArm6ImageDataset, but loads ONLY low-dim fields (e.g., 'robot_state')
 and 'action'. No image decoding; caching still uses a zipped zarr with a fingerprint.
-
-Assumptions (same as image variant, minus images):
-- Raw episodes are converted via real_data_to_replay_buffer into a ReplayBuffer with keys:
-    - 'robot_state' : (T, 7) float32
-    - 'action'      : (T, 7) float32
-    - 'episode_ends': (E,) int64
-- Units: whatever your logger uses (deg/rad); normalizer will scale appropriately.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import os, json, hashlib, shutil, copy
 
 import numpy as np
-import torch, zarr
+import torch
+import torch.nn as nn
+import zarr
 from filelock import FileLock
 from threadpoolctl import threadpool_limits
 from omegaconf import OmegaConf
@@ -65,7 +60,7 @@ def _get_replay_buffer_lowdim(
             out_store=store,
             out_resolutions={},              # no image resize
             lowdim_keys=lowdim_keys + ["action"],
-            image_keys=[],                   # critical: skip image decode
+            image_keys=[],                   # skip image decode entirely
         )
 
     # optional slicing if larger than expected
@@ -80,6 +75,45 @@ def _get_replay_buffer_lowdim(
             _zarr_resize_index_last_dim(rb[key], list(range(shp[-1])))
 
     return rb
+
+
+class CompositeNormalizer(nn.Module):
+    """
+    Wraps two normalizers:
+      - obs_norm: LinearNormalizer over obs sub-keys (e.g., robot_state, etc.)
+      - action_norm: SingleFieldLinearNormalizer for 'action'
+
+    Presents a normalize/unnormalize API that accepts/returns:
+        {"obs": {...}, "action": tensor}
+    matching your batch structure.
+    """
+    def __init__(self, obs_norm: LinearNormalizer, action_norm: SingleFieldLinearNormalizer):
+        super().__init__()
+        self.obs_norm = obs_norm
+        self.action_norm = action_norm
+
+    @torch.no_grad()
+    def normalize(self, x: Dict[str, object]) -> Dict[str, object]:
+        y = {}
+        obs = x.get("obs", None)
+        if isinstance(obs, dict):
+            y["obs"] = self.obs_norm.normalize(obs)
+        else:
+            # fallback if someone passes a flat tensor as obs
+            y["obs"] = self.obs_norm.normalize({"obs": obs})["obs"]
+        y["action"] = self.action_norm.normalize(x["action"])
+        return y
+
+    @torch.no_grad()
+    def unnormalize(self, x: Dict[str, object]) -> Dict[str, object]:
+        y = {}
+        obs = x.get("obs", None)
+        if isinstance(obs, dict):
+            y["obs"] = self.obs_norm.unnormalize(obs)
+        else:
+            y["obs"] = self.obs_norm.unnormalize({"obs": obs})["obs"]
+        y["action"] = self.action_norm.unnormalize(x["action"])
+        return y
 
 
 class RealXArm6LowdimDataset(BaseLowdimDataset):
@@ -113,8 +147,8 @@ class RealXArm6LowdimDataset(BaseLowdimDataset):
         assert os.path.isdir(dataset_path) or (
             zarr_cache_provided and zarr_cache_path_provided is not None and os.path.isfile(zarr_cache_path_provided)
         ), f"dataset_path not found: {dataset_path}"
-        
-        # fingerprint (match style of image dataset; add a 'kind' so caches don't collide)
+
+        # fingerprint (add a 'kind' so caches don't collide)
         if zarr_cache_provided:
             assert zarr_cache_path_provided is not None, "Must provide zarr_cache_path_provided when zarr_cache_provided=True"
             cache_zarr_path = zarr_cache_path_provided
@@ -130,34 +164,35 @@ class RealXArm6LowdimDataset(BaseLowdimDataset):
             cache_zarr_path = os.path.join(target_dir, f"{fp_hash}.zarr.zip")
         cache_lock_path = cache_zarr_path + ".lock"
 
-        # Build or load cache (identical flow)
-        print(f"[RealXArm6ImageDataset] Acquiring cache lock: {cache_lock_path}")
+        # Build or load cache
+        print(f"[RealXArm6LowdimDataset] Acquiring cache lock: {cache_lock_path}")
         replay_buffer: Optional[ReplayBuffer] = None
         if use_cache:
             with FileLock(cache_lock_path):
                 if not os.path.exists(cache_zarr_path):
                     try:
-                        print("[RealXArm6ImageDataset] Cache miss → building ReplayBuffer in memory...")
-                        # replay_buffer = _get_replay_buffer_lowdim(
-                        #     dataset_path=dataset_path,
-                        #     shape_meta=shape_meta,
-                        #     store=zarr.MemoryStore(),
-                        # )
-                        # print("[RealXArm6ImageDataset] Saving cache to disk...")
-                        # with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
-                        #     replay_buffer.save_to_store(store=zip_store)
-                        print("[RealXArm6ImageDataset] Cache saved.")
+                        print("[RealXArm6LowdimDataset] Cache miss → building ReplayBuffer in memory...")
+                        replay_buffer = _get_replay_buffer_lowdim(
+                            dataset_path=dataset_path,
+                            shape_meta=shape_meta,
+                            store=zarr.MemoryStore(),
+                        )
+                        print("[RealXArm6LowdimDataset] Saving cache to disk...")
+                        with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
+                            replay_buffer.save_to_store(store=zip_store)
+                        print("[RealXArm6LowdimDataset] Cache saved.")
                     except Exception as e:
+                        # Clean up partial
                         if os.path.exists(cache_zarr_path):
                             shutil.rmtree(cache_zarr_path, ignore_errors=True)
                         raise e
                 else:
+                    print("[RealXArm6LowdimDataset] Cache hit → loading ReplayBuffer from disk...")
                     with zarr.ZipStore(cache_zarr_path, mode="r") as zip_store:
-                        print("[RealXArm6ImageDataset] Cache hit → loading ReplayBuffer from disk...")
                         replay_buffer = ReplayBuffer.copy_from_store(
                             src_store=zip_store, store=zarr.MemoryStore()
                         )
-                        print("[RealXArm6ImageDataset] Cache loaded.")
+                    print("[RealXArm6LowdimDataset] Cache loaded.")
         else:
             replay_buffer = _get_replay_buffer_lowdim(
                 dataset_path=dataset_path,
@@ -199,7 +234,7 @@ class RealXArm6LowdimDataset(BaseLowdimDataset):
             for key in lowdim_keys:
                 key_first_k[key] = n_obs_steps
 
-        # Split and sampler (same as image dataset)
+        # Split and sampler
         val_mask = get_val_mask(
             n_episodes=replay_buffer.n_episodes, val_ratio=val_ratio, seed=seed
         )
@@ -240,16 +275,25 @@ class RealXArm6LowdimDataset(BaseLowdimDataset):
         val_set.val_mask = ~self.val_mask
         return val_set
 
-    def get_normalizer(self, **kwargs) -> LinearNormalizer:
-        normalizer = LinearNormalizer()
-        normalizer["action"] = SingleFieldLinearNormalizer.create_fit(
-            self.replay_buffer["action"]
-        )
+    def get_normalizer(self, **kwargs) -> nn.Module:
+        """
+        Return a normalizer that mirrors the batch structure:
+            {"obs": {<obs subkeys>...}, "action": ...}
+        """
+        # Build an obs normalizer over subkeys
+        obs_norm = LinearNormalizer()
         for key in self.lowdim_keys:
-            normalizer[key] = SingleFieldLinearNormalizer.create_fit(
+            obs_norm[key] = SingleFieldLinearNormalizer.create_fit(
                 self.replay_buffer[key]
             )
-        return normalizer
+
+        # Action normalizer (single field)
+        action_norm = SingleFieldLinearNormalizer.create_fit(
+            self.replay_buffer["action"]
+        )
+
+        # Wrap them so .normalize()/.unnormalize() work on {"obs": {...}, "action": ...}
+        return CompositeNormalizer(obs_norm=obs_norm, action_norm=action_norm)
 
     def get_all_actions(self) -> torch.Tensor:
         return torch.from_numpy(self.replay_buffer["action"])
