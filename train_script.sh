@@ -1,8 +1,8 @@
 #!/bin/bash -l
 
 #PBS -N DIFFUSION_TRAIN
-#PBS -l walltime=32:00:00
-#PBS -l select=1:ncpus=24:ngpus=1:gpu_id=H100:mem=160gb
+#PBS -l walltime=33:00:00
+#PBS -l select=1:ncpus=24:ngpus=1:gpu_id=A100:mem=200gb
 
 set -euo pipefail
 
