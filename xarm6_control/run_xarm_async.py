@@ -279,7 +279,7 @@ def main(
     mock: bool = False,
     control_hz: float = 30.0,
     step_through_instructions: bool = False,
-    delta_threshold: float = 0.25,           # degrees per joint
+    delta_threshold: float = 0.5,           # degrees per joint
     log_dir: str = "/media/acrv/DanielsSSD/Test_sem2/diffusion",
     save: bool = False,
     num_inference_steps: int = 8,            # local latency lever (try 6–12)
@@ -382,6 +382,20 @@ def main(
                 action_chunk = next_action_chunk; next_action_chunk = None
                 action_chunk_len = action_chunk.shape[0]; actions_done = 0
                 print(f"[POLICY] Adopted initial chunk: {action_chunk_len} steps")
+
+                # ✅ Debug log for first few steps
+                if step_idx < 5:
+                    try:
+                        if buf:
+                            obs_np = buf.snapshot_np()
+                            print("obs base_rgb:", obs_np["base_rgb"].shape,
+                                obs_np["base_rgb"].dtype,
+                                obs_np["base_rgb"].min(),
+                                obs_np["base_rgb"].max())
+                            print("robot_state:", obs_np["robot_state"][-1])
+                        print("pred action shape:", action_chunk.shape)
+                    except Exception as e:
+                        print("[DEBUG] Logging error (adopted):", e)
             else:
                 if (not use_remote_policy) and (buf and buf.ready()):
                     obs_np = buf.snapshot_np()
