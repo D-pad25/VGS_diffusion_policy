@@ -9,7 +9,7 @@ obs_dim: ${task.obs_dim}
 action_dim: ${task.action_dim}
 keypoint_dim: ${task.keypoint_dim}
 task_name: ${task.name}
-exp_name: "default"
+exp_name: "lowdim_ablation"
 
 horizon: 16
 n_obs_steps: 2
@@ -69,17 +69,17 @@ ema:
 
 dataloader:
   batch_size: 256
-  num_workers: 1
+  num_workers: 2
   shuffle: True
   pin_memory: True
-  persistent_workers: False
+  persistent_workers: True
 
 val_dataloader:
   batch_size: 256
-  num_workers: 1
+  num_workers: 2
   shuffle: False
   pin_memory: True
-  persistent_workers: False
+  persistent_workers: True
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -92,17 +92,17 @@ training:
   device: "cuda:0"
   seed: 42
   debug: False
-  resume: True
+  resume: False
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 5000
+  num_epochs: 1000
   gradient_accumulate_every: 1
   use_ema: True
   # training loop control
   # in epochs
-  rollout_every: 50
-  checkpoint_every: 50
+  rollout_every: null
+  checkpoint_every: 25
   val_every: 1
   sample_every: 5
   # steps per epoch
@@ -113,7 +113,7 @@ training:
 
 logging:
   project: diffusion_policy_debug
-  resume: True
+  resume: False
   mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
@@ -122,10 +122,10 @@ logging:
 
 checkpoint:
   topk:
-    monitor_key: test_mean_score
-    mode: max
-    k: 5
-    format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
+    monitor_key: val_loss       
+    mode: min
+    k: 10
+    format_str: 'epoch={epoch:04d}-val_loss={val_loss:.4f}.ckpt'
   save_last_ckpt: True
   save_last_snapshot: False
 

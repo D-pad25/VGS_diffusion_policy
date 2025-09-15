@@ -1,0 +1,38 @@
+# diffusion_policy/config/task/real_xarm_lowdim.yaml
+name: real_xarm_lowdim
+
+## HPC ##
+dataset_path: /home/n10813934/data/diffusion/converted_padded     # path to the root of your dataset (episodes directories)
+
+shape_meta: &shape_meta
+  obs:
+    robot_state:
+      shape: [7]        # 6 joints + 1 gripper position
+      type: low_dim
+  action:
+    shape: [7]          # 6 joint commands + 1 gripper command
+
+env_runner:
+  _target_: diffusion_policy.env_runner.xarm6_image_runner.XArm6ImageRunner
+
+dataset:
+  _target_: diffusion_policy.dataset.real_xarm6_lowdim_dataset.RealXArm6LowdimDataset
+  shape_meta: *shape_meta
+  dataset_path: ${task.dataset_path}
+  # work_store_kind: dir        # "dir" or "zip" for the cache file
+  # mem_debug: true
+  # out_dir: ${task.out_dir}     # COMMENT OUT IF TRAINING
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1+${n_latency_steps}'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  n_obs_steps: ${dataset_obs_steps}
+  n_latency_steps: ${n_latency_steps}
+  use_cache: True                   # cache dataset in memory for speed (optional)
+  seed: 42
+  val_ratio: 0.1
+  max_train_episodes: null
+  delta_action: False
+
+obs_dim: 7
+action_dim: 7
+keypoint_dim: 0
