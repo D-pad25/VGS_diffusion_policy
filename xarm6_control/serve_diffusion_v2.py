@@ -173,13 +173,13 @@ def _load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int]:
     policy = policy.to(device).eval()
 
     # Fewer denoise steps by default (latency knob)
-    try:
-        policy.set_num_inference_steps(6)
-    except AttributeError:
-        policy.num_inference_steps = min(getattr(policy, 'num_inference_steps', 16), 6)
+    # try:
+    #     policy.set_num_inference_steps(6)
+    # except AttributeError:
+    #     policy.num_inference_steps = min(getattr(policy, 'num_inference_steps', 16), 6)
 
-    # Test with 50
-    policy.num_inference_steps = 50
+    # # Test with 50
+    # policy.num_inference_steps = 50
     # Optional compile (PyTorch 2.x). Ignore if unsupported.
     try:
         policy = torch.compile(policy, mode="reduce-overhead", fullgraph=False)
