@@ -283,7 +283,7 @@ def main(
     log_dir: str = "/media/acrv/DanielsSSD/Test_sem2/diffusion",
     save: bool = False,
     num_inference_steps: int = 8,            # local latency lever (try 6–12)
-    prefetch_margin: int = 4,                # request next chunk when this many steps remain
+    prefetch_margin: int = 8,                # request next chunk when this many steps remain
     fp16: bool = True,                       # enable mixed precision on CUDA
     channels_last: bool = False,             # keep False; 5-D tensors aren't channels-last
     # Remote policy settings
@@ -480,7 +480,7 @@ def main(
         else:
             if save: env.save_step_data(log_dir, step_idx, copy.deepcopy(obs), action)
             env.step(np.array(action))
-        env.step(np.array(action))
+        # env.step(np.array(action))
         # Keep control rate
         elapsed = time.time() - loop_t0
         if elapsed < dt:
