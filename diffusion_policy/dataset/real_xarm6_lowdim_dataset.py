@@ -47,6 +47,17 @@ def _get_replay_buffer_lowdim(
     shape_meta: dict,
     store: zarr.storage.BaseStore,
 ) -> ReplayBuffer:
+    if os.path.isdir(dataset_path):
+        entries = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path)]
+        zips = [p for p in entries if p.endswith(".zarr.zip")]
+        if zips:
+            zips.sort(key=os.path.getmtime, reverse=True)  # newest first
+            with zarr.ZipStore(zips[0], mode="r") as zs:
+                rb = ReplayBuffer.copy_from_store(src_store=zs, store=zarr.MemoryStore())
+            for k in list(rb.keys()):
+                if k.endswith("_rgb"):
+                    del rb[k]
+            return rb
     """Build a ReplayBuffer from real data (low-dim only, no images)."""
     # parse obs keys from shape_meta
     lowdim_keys: List[str] = []
@@ -109,7 +120,7 @@ class RealXArm6LowdimDataset(BaseImageDataset):
         delta_exclude_gripper: bool = True,
     ) -> None:
         assert os.path.isdir(dataset_path), f"dataset_path not found: {dataset_path}"
-
+        
         # fingerprint (match style of image dataset; add a 'kind' so caches don't collide)
         fp = {
             "kind": "lowdim_only",
@@ -123,27 +134,33 @@ class RealXArm6LowdimDataset(BaseImageDataset):
         cache_lock_path = cache_zarr_path + ".lock"
 
         # Build or load cache (identical flow)
+        print(f"[RealXArm6ImageDataset] Acquiring cache lock: {cache_lock_path}")
         replay_buffer: Optional[ReplayBuffer] = None
         if use_cache:
             with FileLock(cache_lock_path):
                 if not os.path.exists(cache_zarr_path):
                     try:
+                        print("[RealXArm6ImageDataset] Cache miss → building ReplayBuffer in memory...")
                         replay_buffer = _get_replay_buffer_lowdim(
                             dataset_path=dataset_path,
                             shape_meta=shape_meta,
                             store=zarr.MemoryStore(),
                         )
+                        print("[RealXArm6ImageDataset] Saving cache to disk...")
                         with zarr.ZipStore(cache_zarr_path, mode="w") as zip_store:
                             replay_buffer.save_to_store(store=zip_store)
+                        print("[RealXArm6ImageDataset] Cache saved.")
                     except Exception as e:
                         if os.path.exists(cache_zarr_path):
                             shutil.rmtree(cache_zarr_path, ignore_errors=True)
                         raise e
                 else:
                     with zarr.ZipStore(cache_zarr_path, mode="r") as zip_store:
+                        print("[RealXArm6ImageDataset] Cache hit → loading ReplayBuffer from disk...")
                         replay_buffer = ReplayBuffer.copy_from_store(
                             src_store=zip_store, store=zarr.MemoryStore()
                         )
+                        print("[RealXArm6ImageDataset] Cache loaded.")
         else:
             replay_buffer = _get_replay_buffer_lowdim(
                 dataset_path=dataset_path,
