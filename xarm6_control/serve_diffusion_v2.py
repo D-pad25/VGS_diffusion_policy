@@ -178,6 +178,8 @@ def _load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int]:
     except AttributeError:
         policy.num_inference_steps = min(getattr(policy, 'num_inference_steps', 16), 6)
 
+    # Test with 50
+    policy.num_inference_steps = 50
     # Optional compile (PyTorch 2.x). Ignore if unsupported.
     try:
         policy = torch.compile(policy, mode="reduce-overhead", fullgraph=False)
