@@ -2,7 +2,7 @@
 
 #PBS -N DIFFUSION_TRAIN
 #PBS -l walltime=24:00:00
-#PBS -l select=1:ncpus=8:ngpus=1:gpu_id=H100:mem=64gb
+#PBS -l select=1:ncpus=8:ngpus=1:gpu_id=A100:mem=64gb
 
 set -euo pipefail
 
