@@ -22,7 +22,7 @@ from threadpoolctl import threadpool_limits
 from omegaconf import OmegaConf
 
 from diffusion_policy.common.pytorch_util import dict_apply
-from diffusion_policy.dataset.base_dataset import BaseImageDataset
+from diffusion_policy.dataset.base_dataset import BaseLowdimDataset
 from diffusion_policy.model.common.normalizer import (
     LinearNormalizer, SingleFieldLinearNormalizer
 )
@@ -82,7 +82,7 @@ def _get_replay_buffer_lowdim(
     return rb
 
 
-class RealXArm6LowdimDataset(BaseImageDataset):
+class RealXArm6LowdimDataset(BaseLowdimDataset):
     """
     Low-dim only dataset for Diffusion Policy (mirrors RealXArm6ImageDataset behavior).
     Features:
