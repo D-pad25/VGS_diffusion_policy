@@ -28,6 +28,7 @@ export HYDRA_FULL_ERROR=1
 #   training.max_val_steps=128 logging.mode=disabled
 
 # For full run:
-python train.py --config-name=train_xarm6_diffusion_unet_real_pretrained_workspace
+# python train.py --config-name=train_xarm6_diffusion_unet_real_pretrained_workspace
+python train.py --config-name=train_xarm6_diffusion_unet_real_finetuned_workspace
 
 exit
