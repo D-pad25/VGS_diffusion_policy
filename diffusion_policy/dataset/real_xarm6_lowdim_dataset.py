@@ -277,23 +277,27 @@ class RealXArm6LowdimDataset(BaseLowdimDataset):
 
     def get_normalizer(self, **kwargs) -> nn.Module:
         """
-        Return a normalizer that mirrors the batch structure:
+        Return a hierarchical LinearNormalizer matching the batch structure:
             {"obs": {<obs subkeys>...}, "action": ...}
         """
-        # Build an obs normalizer over subkeys
+        # Top-level normalizer
+        norm = LinearNormalizer()
+
+        # Sub-normalizer for obs/*
         obs_norm = LinearNormalizer()
         for key in self.lowdim_keys:
-            obs_norm[key] = SingleFieldLinearNormalizer.create_fit(
-                self.replay_buffer[key]
-            )
+            # ensure float32 and fit per-field
+            arr = self.replay_buffer[key][:].astype(np.float32)
+            obs_norm[key] = SingleFieldLinearNormalizer.create_fit(arr)
+
+        # Register the sub-tree under 'obs'
+        norm["obs"] = obs_norm
 
         # Action normalizer (single field)
-        action_norm = SingleFieldLinearNormalizer.create_fit(
-            self.replay_buffer["action"]
-        )
+        act_arr = self.replay_buffer["action"][:].astype(np.float32)
+        norm["action"] = SingleFieldLinearNormalizer.create_fit(act_arr)
 
-        # Wrap them so .normalize()/.unnormalize() work on {"obs": {...}, "action": ...}
-        return CompositeNormalizer(obs_norm=obs_norm, action_norm=action_norm)
+        return norm
 
     def get_all_actions(self) -> torch.Tensor:
         return torch.from_numpy(self.replay_buffer["action"])
