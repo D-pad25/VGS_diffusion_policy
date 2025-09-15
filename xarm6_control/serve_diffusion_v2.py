@@ -143,7 +143,7 @@ class _ObsBuffer:
         snap = self.snapshot_np()
         T = snap["base_rgb"].shape[0]
         print(f"[{prefix}] ready={self.ready()} T={T} "
-            f"base{snap['base_rgb'].shape} wrist{snap['wrist_rgb'].shape} state{snap['robot_state'].shape}")
+                f"base{snap['base_rgb'].shape} wrist{snap['wrist_rgb'].shape} state{snap['robot_state'].shape}")
         for t in range(T):
             b = snap["base_rgb"][t]
             w = snap["wrist_rgb"][t]
@@ -152,15 +152,21 @@ class _ObsBuffer:
             # Convert first 6 entries to degrees, keep gripper raw
             joints_deg = np.degrees(s[:6])
             gripper = s[6]
+            state_arr = np.concatenate([joints_deg, [gripper]])
+
             state_str = np.array2string(
-                np.concatenate([joints_deg, [gripper]]),
-                precision=2, floatmode="fixed"
+                state_arr,
+                precision=2,
+                floatmode="fixed",
+                suppress_small=True,   # ✅ no scientific notation
+                max_line_width=200
             )
 
             print(f"[{prefix}] t={t} "
-                f"base[min={b.min():.3f}, max={b.max():.3f}] "
-                f"wrist[min={w.min():.3f}, max={w.max():.3f}] "
-                f"state(deg+grip)={state_str}")
+                    f"base[min={b.min():.3f}, max={b.max():.3f}] "
+                    f"wrist[min={w.min():.3f}, max={w.max():.3f}] "
+                    f"state(deg+grip)={state_str}")
+
 
 
 def _extract_actions(result: Dict) -> torch.Tensor:
