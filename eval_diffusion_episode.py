@@ -268,9 +268,9 @@ def _rmse(a: np.ndarray, b: np.ndarray) -> float:
 # ---------- Main Evaluation Loop ----------
 @dataclass
 class Args:
-    ckpt: str
-    episode_dir: str
-    out_dir: str = "./eval_out"
+    ckpt: str = "/home/d_pad25/Thesis/diffusion_checkpoints/latest.ckpt"
+    episode_dir: str = "/home/d_pad25/Thesis/Data/Evalauation/0828_173511"
+    out_dir: str = "/home/d_pad25/Thesis/Data/Evalauation/eval_out"
     control_hz: float = 30.0
     H: int = 224
     W: int = 224
