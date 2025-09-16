@@ -417,4 +417,4 @@ def main(args: Args):
 
 
 if __name__ == "__main__":
-    tyro.cli(Args).call(main)
+    main(tyro.cli(Args))
