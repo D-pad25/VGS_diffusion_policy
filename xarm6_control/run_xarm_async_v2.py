@@ -297,7 +297,7 @@ def main(
     delta_threshold: float = 0.25,           # degrees per joint
     log_dir: str = "/media/acrv/DanielsSSD/Test_sem2/diffusion",
     save: bool = False,
-    num_inference_steps: int = 8,            # local latency lever (try 6–12)
+    num_inference_steps: int = 100,            # local latency lever (try 6–12)
     prefetch_margin: int = 8,                # request next chunk when this many steps remain
     fp16: bool = True,                       # enable mixed precision on CUDA
     channels_last: bool = False,             # keep False; 5-D tensors aren't channels-last
