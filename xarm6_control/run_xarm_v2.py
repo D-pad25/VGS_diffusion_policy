@@ -144,7 +144,7 @@ def _load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int]:
     policy.to(device).eval()
     if not hasattr(policy, "num_inference_steps"):
         policy.num_inference_steps = 16
-    policy.num_inference_steps = 50
+    policy.num_inference_steps = 16
     n_obs_steps = int(getattr(cfg, "n_obs_steps", 2))
     return policy, cfg, n_obs_steps
 
