@@ -30,6 +30,6 @@ export HYDRA_FULL_ERROR=1
 # For full run:
 # python train.py --config-name=train_xarm6_diffusion_unet_real_pretrained_workspace
 # python train.py --config-name=train_xarm6_diffusion_unet_real_finetuned_workspace
-python train.py --config-name=train_xarm6_diffusion_unet_lowdim_workspace
+python train.py --config-name=train_xarm6_diffusion_unet_real_image_workspace_imagenetNorm
 
 exit

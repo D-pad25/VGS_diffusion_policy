@@ -2,7 +2,7 @@ defaults:
   - _self_
   - task: real_xarm_image
 
-name: train_xarm6_diffusion_unet_image_imagenet_normTRUE
+name: train_xarm6_diffusion_unet_real_image_workspace_imagenetNorm
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
 
 task_name: ${task.name}
