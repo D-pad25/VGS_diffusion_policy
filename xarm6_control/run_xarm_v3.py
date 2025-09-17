@@ -121,7 +121,7 @@ from diffusion_policy.policy.base_image_policy import BaseImagePolicy
 def _load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int]:
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
-    cls = hydra.utils.get_class(cfg.__target_)
+    cls = hydra.utils.get_class(cfg._target_)
     workspace: BaseWorkspace = cls(cfg)
     workspace.load_payload(payload, exclude_keys=None, include_keys=None)
     policy: BaseImagePolicy = workspace.model
