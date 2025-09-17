@@ -128,7 +128,7 @@ class _ObsBuffer:
         return dict(base_rgb=base, wrist_rgb=wrist, robot_state=state)
 
 
-def _load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int]:
+def _load_diffusion_policy(ckpt_path: str, num_inference_steps: int) -> Tuple[BaseImagePolicy, dict, int]:
     payload = torch.load(open(ckpt_path, 'rb'), map_location='cpu', pickle_module=dill)
     cfg = payload['cfg']
     cls = hydra.utils.get_class(cfg._target_)
@@ -144,7 +144,7 @@ def _load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int]:
     policy.to(device).eval()
     if not hasattr(policy, "num_inference_steps"):
         policy.num_inference_steps = 16
-    policy.num_inference_steps = 16
+    policy.num_inference_steps = num_inference_steps
     n_obs_steps = int(getattr(cfg, "n_obs_steps", 2))
     return policy, cfg, n_obs_steps
 
@@ -178,6 +178,7 @@ def main(
     delta_threshold: float = 0.25,        # degrees per joint
     log_dir: str = "/media/acrv/DanielsSSD/Test_sem2/diffusion",
     save: bool = False,
+    num_inference_steps: int = 16,    # local latency lever (try 6–12)
 
     # Remote policy settings
     use_remote_policy: bool = False,
@@ -213,7 +214,7 @@ def main(
         )
         print(f"[REMOTE] Connected to policy server at ws://{policy_server_host}:{policy_server_port}")
     else:
-        policy, cfg, n_obs_steps = _load_diffusion_policy(ckpt)
+        policy, cfg, n_obs_steps = _load_diffusion_policy(ckpt, num_inference_steps)
         device = next(policy.parameters()).device
         print(f"[LOCAL POLICY] Loaded on device: {device}, n_obs_steps={n_obs_steps}")
 
