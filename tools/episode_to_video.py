@@ -1,240 +1,159 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-episode_to_video.py
-Create a video for one trajectory (episode) with text overlays of key data.
-
-Inputs supported:
-  1) --cache_zarr_zip <path/to/hash.zarr.zip>   (fastest; from your RealXArm6ImageDataset cache)
-  2) --dataset_path  <path/to/raw_episodes_root>  (will build a ReplayBuffer in memory)
-
-Overlays per frame:
-  - episode index, step index in episode, global t
-  - timestamp (if present)
-  - robot_state q[0..5] + gripper
-  - action u[0..5] + gripper
-  - Δu (this - previous) for quick “jerk/change” inspection
-
-Layout:
-  - If both 'wrist_rgb' and 'base_rgb' exist -> horizontal concat [wrist | base]
-  - If only one exists -> single view
-"""
-
-import os
-import argparse
-import numpy as np
-import cv2
-import zarr
+import os, argparse, numpy as np, cv2, zarr
 from typing import Optional, Tuple, List
 from tqdm import tqdm
-
-# Import your repo utilities (as you already use):
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 try:
-    # Your conversion util (provided in your message)
     from diffusion_policy.real_world.real_xarm6_data_conversion import real_data_to_replay_buffer
 except Exception:
     real_data_to_replay_buffer = None
 
-
-def load_replay_buffer(
-    cache_zarr_zip: Optional[str],
-    dataset_path: Optional[str],
-    out_resolutions: Tuple[int, int]=(224, 224)
-) -> ReplayBuffer:
-    """
-    Load a ReplayBuffer from either a zipped zarr cache or by building from raw episodes.
-    """
-    assert cache_zarr_zip or dataset_path, "Provide --cache_zarr_zip or --dataset_path"
+def load_replay_buffer(cache_zarr_zip: Optional[str], dataset_path: Optional[str],
+                       out_resolutions: Tuple[int,int]=(224,224)) -> ReplayBuffer:
+    assert cache_zarr_zip or dataset_path
     if cache_zarr_zip:
-        assert os.path.isfile(cache_zarr_zip), f"Not found: {cache_zarr_zip}"
         with zarr.ZipStore(cache_zarr_zip, mode="r") as zip_store:
-            # Copy into fast MemoryStore for quick random access
-            rb = ReplayBuffer.copy_from_store(src_store=zip_store, store=zarr.MemoryStore())
-        return rb
+            return ReplayBuffer.copy_from_store(src_store=zip_store, store=zarr.MemoryStore())
+    assert real_data_to_replay_buffer is not None, "Need cache_zarr_zip or real_data_to_replay_buffer."
+    return real_data_to_replay_buffer(dataset_path=dataset_path, out_store=zarr.MemoryStore(),
+                                      out_resolutions=out_resolutions,
+                                      lowdim_keys=['robot_state','action','timestamp','episode_ends','episode_lengths'],
+                                      image_keys=['wrist_rgb','base_rgb'])
 
-    # Fallback: build from raw files
-    assert real_data_to_replay_buffer is not None, (
-        "real_data_to_replay_buffer import failed and no cache provided."
-    )
-    rb = real_data_to_replay_buffer(
-        dataset_path=dataset_path,
-        out_store=zarr.MemoryStore(),
-        out_resolutions=out_resolutions,      # resize frames
-        lowdim_keys=['robot_state', 'action', 'timestamp', 'episode_ends', 'episode_lengths'],
-        image_keys=['wrist_rgb', 'base_rgb']
-    )
-    return rb
+def episode_range(episode_ends: np.ndarray, epi_idx: int):
+    end = int(episode_ends[epi_idx]); start = 0 if epi_idx == 0 else int(episode_ends[epi_idx-1]); return start, end
 
+def ensure_size(img: np.ndarray, hw: Tuple[int,int]) -> np.ndarray:
+    h,w = hw;  return img if img.shape[:2]==(h,w) else cv2.resize(img,(w,h),interpolation=cv2.INTER_AREA)
 
-def episode_range(episode_ends: np.ndarray, epi_idx: int) -> Tuple[int, int]:
-    """
-    Convert episode index to [start, end) global frame indices.
-    """
-    assert 0 <= epi_idx < len(episode_ends), f"episode_index out of range (0..{len(episode_ends)-1})"
-    end = int(episode_ends[epi_idx])
-    start = 0 if epi_idx == 0 else int(episode_ends[epi_idx - 1])
-    return start, end
+def put_text_outlined(img, text, org, font, scale, color=(255,255,255), thickness=1, outline=2):
+    cv2.putText(img, text, org, font, scale, (0,0,0), outline, cv2.LINE_AA)
+    cv2.putText(img, text, org, font, scale, color, thickness, cv2.LINE_AA)
 
+def draw_card(img, lines: List[str], anchor: str, margin: int, pad: int, font, scale, lh, alpha=0.45):
+    H,W,_ = img.shape
+    # measure width
+    wmax = 0; htot = len(lines)*lh
+    for s in lines:
+        w,_ = cv2.getTextSize(s, font, scale, 1)[0]
+        wmax = max(wmax, w)
+    # anchor position
+    if anchor == "top":
+        x0, y0 = margin, margin
+    elif anchor == "bl":
+        x0, y0 = margin, H - margin - (htot + 2*pad)
+    elif anchor == "br":
+        x0, y0 = W - margin - (wmax + 2*pad), H - margin - (htot + 2*pad)
+    else:
+        x0, y0 = margin, margin
+    x1, y1 = x0 + wmax + 2*pad, y0 + htot + 2*pad
+    overlay = img.copy()
+    cv2.rectangle(overlay, (x0,y0), (x1,y1), (0,0,0), -1)
+    cv2.addWeighted(overlay, alpha, img, 1-alpha, 0, dst=img)
+    # text
+    y = y0 + pad + int(0.8*lh)
+    for s in lines:
+        put_text_outlined(img, s, (x0+pad, y), font, scale)
+        y += lh
 
-def ensure_same_size(img: np.ndarray, target_hw: Tuple[int, int]) -> np.ndarray:
-    """
-    Resize HxWx3 uint8 image to target (H, W).
-    """
-    th, tw = target_hw
-    if img.shape[0] == th and img.shape[1] == tw:
-        return img
-    return cv2.resize(img, (tw, th), interpolation=cv2.INTER_AREA)
-
-
-def draw_text_block(
-    canvas: np.ndarray,
-    lines: List[str],
-    topleft: Tuple[int, int]=(8, 8),
-    font=cv2.FONT_HERSHEY_SIMPLEX,
-    font_scale: float=0.45,
-    line_height: int=18,
-    text_color=(255, 255, 255),
-    box_color=(0, 0, 0),
-    alpha: float=0.55,
-    padding: int=6,
-    thickness: int=1
-) -> None:
-    """
-    Draws a semi-transparent text box with multiple lines.
-    """
-    x0, y0 = topleft
-    # Determine box size
-    (w_max, h_total) = (0, 0)
-    for i, text in enumerate(lines):
-        (w, h) = cv2.getTextSize(text, font, font_scale, thickness)[0]
-        w_max = max(w_max, w)
-    h_total = len(lines) * line_height
-
-    # Background
-    x1, y1 = x0 + w_max + 2*padding, y0 + h_total + 2*padding
-    overlay = canvas.copy()
-    cv2.rectangle(overlay, (x0, y0), (x1, y1), box_color, -1)
-    cv2.addWeighted(overlay, alpha, canvas, 1 - alpha, 0, dst=canvas)
-
-    # Text lines
-    y = y0 + padding + int(line_height * 0.75)
-    for text in lines:
-        cv2.putText(canvas, text, (x0 + padding, y), font, font_scale, text_color, thickness, cv2.LINE_AA)
-        y += line_height
-
-
-def format_vec(v: np.ndarray, k: int) -> str:
-    """
-    Format first k elements with compact width; assumes v is 1D.
-    """
-    return "[" + ", ".join(f"{float(x): .3f}" for x in v[:k]) + "]"
-
+def fmt_vec(v: np.ndarray, k: int, dec: int=3) -> str:
+    return "[" + ", ".join(f"{float(x):.{dec}f}" for x in v[:k]) + "]"
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cache_zarr_zip", type=str, default=None,
-                    help="Path to zipped zarr cache (e.g., <hash>.zarr.zip). Preferred.")
-    ap.add_argument("--dataset_path", type=str, default=None,
-                    help="Raw episodes root. Uses real_data_to_replay_buffer if no cache given.")
-    ap.add_argument("--episode_index", type=int, default=0, help="Episode to render")
-    ap.add_argument("--out", type=str, required=True, help="Output video path (e.g., out.mp4)")
-    ap.add_argument("--fps", type=float, default=30.0,
-                    help="FPS override. If 0, will infer from timestamps or default to 30.")
-    ap.add_argument("--max_joints", type=int, default=6,
-                    help="How many joints from q/u to print (before gripper).")
-    ap.add_argument("--resize_h", type=int, default=224, help="Resize height for each view")
-    ap.add_argument("--resize_w", type=int, default=224, help="Resize width for each view")
+    ap.add_argument("--cache_zarr_zip", type=str, default=None)
+    ap.add_argument("--dataset_path", type=str, default=None)
+    ap.add_argument("--episode_index", type=int, default=0)
+    ap.add_argument("--out", type=str, required=True)
+    ap.add_argument("--fps", type=float, default=0.0)
+    ap.add_argument("--resize_h", type=int, default=360)   # bigger default for readability
+    ap.add_argument("--resize_w", type=int, default=360)
+    ap.add_argument("--show_joints", type=int, default=3)  # compact
+    ap.add_argument("--decimals", type=int, default=3)
     args = ap.parse_args()
 
-    rb = load_replay_buffer(args.cache_zarr_zip, args.dataset_path, out_resolutions=(args.resize_w, args.resize_h))
+    rb = load_replay_buffer(args.cache_zarr_zip, args.dataset_path,
+                            out_resolutions=(args.resize_w, args.resize_h))
 
-    # Check available keys
-    have_wrist = 'wrist_rgb' in rb
-    have_base  = 'base_rgb' in rb
-    assert have_wrist or have_base, "ReplayBuffer must contain at least one of 'wrist_rgb' or 'base_rgb'."
+    have_wrist = 'wrist_rgb' in rb; have_base = 'base_rgb' in rb
+    assert have_wrist or have_base, "Need at least one camera key."
 
-    # Episode segmentation
     ep_ends = rb.episode_ends[:]
-    start, end = episode_range(ep_ends, args.episode_index)
-    T = end - start
-    assert T > 0, "Empty episode."
+    s,e = episode_range(ep_ends, args.episode_index)
+    T = e - s;  assert T > 0
 
-    # Pull arrays (slice once for speed)
-    wrist = rb['wrist_rgb'][start:end] if have_wrist else None  # (T,H,W,3) uint8
-    base  = rb['base_rgb'][start:end]  if have_base  else None
-    q     = rb['robot_state'][start:end]               # (T,7) float
-    u     = rb['action'][start:end]                    # (T,7) float
-    tstamp = rb['timestamp'][start:end] if 'timestamp' in rb else None
+    wrist = rb['wrist_rgb'][s:e] if have_wrist else None
+    base  = rb['base_rgb'][s:e]  if have_base else None
+    q     = rb['robot_state'][s:e]
+    u     = rb['action'][s:e]
+    ts    = rb['timestamp'][s:e] if 'timestamp' in rb else None
 
-    # Infer FPS
-    if args.fps > 0:
-        fps = float(args.fps)
+    # FPS
+    if args.fps > 0: fps = float(args.fps)
     else:
-        if tstamp is not None and len(tstamp) > 1:
-            dt = np.diff(tstamp).astype(np.float64)
-            med_dt = float(np.median(dt[dt > 0])) if np.any(dt > 0) else 0.0
-            fps = (1.0 / med_dt) if med_dt > 0 else 30.0
-        else:
-            fps = 30.0
+        if ts is not None and len(ts) > 1:
+            dt = np.diff(ts); dt = dt[dt>0]
+            fps = (1.0/float(np.median(dt))) if dt.size>0 else 30.0
+        else: fps = 30.0
 
-    # Compute final frame size
-    H, W = args.resize_h, args.resize_w
-    # Compose a dummy frame to set writer size
-    def make_frame(idx: int) -> np.ndarray:
+    H,W = args.resize_h, args.resize_w
+    def compose(i):
         views = []
-        if have_wrist:
-            views.append(ensure_same_size(wrist[idx], (H, W)))
-        if have_base:
-            views.append(ensure_same_size(base[idx], (H, W)))
-        frame = views[0] if len(views) == 1 else np.hstack(views)
-        return frame
+        if have_wrist: views.append(ensure_size(wrist[i], (H,W)))
+        if have_base:  views.append(ensure_size(base[i],  (H,W)))
+        return views[0] if len(views)==1 else np.hstack(views)
 
-    # Pre-create writer
-    sample_frame = make_frame(0)
-    vid_h, vid_w = sample_frame.shape[0], sample_frame.shape[1]
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    vw = cv2.VideoWriter(args.out, fourcc, fps, (vid_w, vid_h))
-    assert vw.isOpened(), f"Failed to open VideoWriter for {args.out}"
+    sample = compose(0)
+    vh, vw = sample.shape[:2]
+    writer = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (vw, vh))
+    assert writer.isOpened(), f"Cannot open writer: {args.out}"
 
-    # Render loop
+    # adaptive font scaling
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = max(0.38, min(vh/540.0, 0.9))   # ~0.5 for 360p height, smaller for 224p
+    th, _ = cv2.getTextSize("Hg", font, scale, 1)[0]
+    lh = int(th*1.35)
+
     last_u = None
-    with tqdm(total=T, desc=f"Rendering episode {args.episode_index}", unit="f") as pbar:
+    with tqdm(total=T, desc=f"Episode {args.episode_index}") as pbar:
         for i in range(T):
-            frame = make_frame(i).copy()
+            frame = compose(i).copy()
 
-            # Prepare overlay lines
-            global_idx = start + i
-            step_in_ep = i
-            lines = []
-            lines.append(f"epi={args.episode_index}  step={step_in_ep}/{T-1}  t={global_idx}")
-            if tstamp is not None:
-                lines.append(f"timestamp: {tstamp[i]:.3f}")
+            # --- top HUD (slim) ---
+            meta = [
+                f"epi={args.episode_index}  step={i}/{T-1}  t={s+i}"
+                + (f"  time={ts[i]:.3f}" if ts is not None else "")
+            ]
+            draw_card(frame, meta, anchor="top", margin=6, pad=6, font=font, scale=scale, lh=lh, alpha=0.35)
 
-            # q and u
-            q_i = q[i]
-            u_i = u[i]
-            maxj = min(args.max_joints, 6)
+            # --- bottom-left: q ---
+            maxj = max(1, min(args.show_joints, 6))
+            qi = q[i]; ui = u[i]
+            q_lines = [
+                f"q[0:{maxj}]: {fmt_vec(qi, maxj, args.decimals)}",
+                f"g: {qi[6]:.{args.decimals}f}"
+            ]
+            draw_card(frame, q_lines, anchor="bl", margin=8, pad=6, font=font, scale=scale, lh=lh, alpha=0.35)
 
-            lines.append(f"q[0:{maxj}]: {format_vec(q_i, maxj)}  g: {q_i[6]: .3f}")
-            lines.append(f"u[0:{maxj}]: {format_vec(u_i, maxj)}  g: {u_i[6]: .3f}")
-
-            # Δu vs previous
+            # --- bottom-right: u & Δu ---
             if last_u is not None:
-                du = u_i - last_u
-                lines.append(f"d u:      {format_vec(du, maxj)}  g: {du[6]: .3f}")
+                du = ui - last_u
+                du_str = fmt_vec(du, maxj, args.decimals)
+                dg = f"{du[6]:.{args.decimals}f}"
             else:
-                lines.append(f"d u:      {'[ 0.000, ...]':>18}  g:  0.000")
+                du_str = "[" + ", ".join(["0.000"]*maxj) + "]"
+                dg = f"{0.0:.{args.decimals}f}"
+            u_lines = [
+                f"u[0:{maxj}]: {fmt_vec(ui, maxj, args.decimals)}   g: {ui[6]:.{args.decimals}f}",
+                f"Δu:        {du_str}   g: {dg}"
+            ]
+            draw_card(frame, u_lines, anchor="br", margin=8, pad=6, font=font, scale=scale, lh=lh, alpha=0.35)
 
-            draw_text_block(frame, lines, topleft=(8, 8), font_scale=0.48, line_height=19, alpha=0.55)
+            writer.write(frame); last_u = ui; pbar.update(1)
 
-            vw.write(frame)
-            last_u = u_i
-            pbar.update(1)
-
-    vw.release()
-    print(f"Saved video to: {args.out}\nFPS used: {fps:.2f}, frames: {T}, size: {vid_w}x{vid_h}")
-
+    writer.release()
+    print(f"Saved: {args.out}  ({vw}x{vh} @ {fps:.2f} fps, frames={T})")
 
 if __name__ == "__main__":
     main()
