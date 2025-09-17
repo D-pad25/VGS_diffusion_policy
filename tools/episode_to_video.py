@@ -111,7 +111,7 @@ def render_frame(wrist_img: np.ndarray,
 
     # (Keep color order as-is; if your stored frames are RGB and you prefer cv2 colors, uncomment below)
     frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-    frame = frame_rgb.copy()
+    # frame = frame_rgb.copy()
 
     # Header overlay bar
     overlay = frame.copy()
