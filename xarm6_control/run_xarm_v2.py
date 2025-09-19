@@ -358,7 +358,7 @@ if __name__ == "__main__":
         p.add_argument("--control_hz", type=float, default=30.0)
         p.add_argument("--step_through_instructions", action="store_true")
         p.add_argument("--delta_threshold", type=float, default=0.25)
-        p.add_argument("--log_dir", default=os.path.expanduser("~/diffusion_logs"))
+        p.add_argument("--log_dir", default=os.path.expanduser("/media/acrv/DanielsSSD/Test_sem2/diffusion"))
         p.add_argument("--save", action="store_true")
         p.add_argument("--use_remote_policy", action="store_true")
         p.add_argument("--policy_server_host", default="127.0.0.1")
