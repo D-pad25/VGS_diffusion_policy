@@ -363,5 +363,6 @@ if __name__ == "__main__":
         p.add_argument("--use_remote_policy", action="store_true")
         p.add_argument("--policy_server_host", default="127.0.0.1")
         p.add_argument("--policy_server_port", type=int, default=8765)
+        p.add_argument("--num_inference_steps", type=int, default=16)
         args = p.parse_args()
         main(**vars(args))
