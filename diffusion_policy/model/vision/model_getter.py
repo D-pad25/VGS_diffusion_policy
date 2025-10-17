@@ -20,9 +20,9 @@ def get_r3m(name, **kwargs):
     name: resnet18, resnet34, resnet50
     """
     import r3m
-    r3m.device = 'cpu'
+    r3m.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = r3m.load_r3m(name)
     r3m_model = model.module
     resnet_model = r3m_model.convnet
-    resnet_model = resnet_model.to('cpu')
+    resnet_model = resnet_model.to('cuda' if torch.cuda.is_available() else 'cpu')
     return resnet_model
