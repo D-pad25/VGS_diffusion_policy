@@ -34,7 +34,7 @@ export HYDRA_FULL_ERROR=1
 
 # SCRIPTS TO RUN
 # python train.py --config-name=train_xarm6_diffusion_unet_real_image_workspace_r3m
-python train.py --config-name=train_xarm6_diffusion_unet_real_image_workspace_r3m_fine_tune
-# python train.py --config-name=train_xarm6_diffusion_unet_real_image_workspace_shared_rgb
+# python train.py --config-name=train_xarm6_diffusion_unet_real_image_workspace_r3m_fine_tune
+python train.py --config-name=train_xarm6_diffusion_unet_real_image_workspace_shared_rgb
 
 exit
