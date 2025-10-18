@@ -3,29 +3,16 @@
 """
 Batch evaluator for Diffusion Policy checkpoints.
 
-What it adds:
-- Scans multiple checkpoint roots (your six models below).
-- Flexible selection: all / latest / best-by-val_loss / top-k-by-val_loss.
-- Writes per-ckpt metrics (CSV + summary.json) in tidy subfolders.
-- Builds per-model Excel workbooks + one global Excel with all sheets.
-
-Usage examples
---------------
-# Evaluate only latest.ckpt in each folder
-python eval_batch.py --episode-dir "C:\\path\\to\\episode" --out-root "C:\\tmp\\eval" --ckpt-mode latest
-
-# Evaluate best-by-val_loss in each folder
-python eval_batch.py --episode-dir "C:\\path\\to\\episode" --out-root "C:\\tmp\\eval" --ckpt-mode best
-
-# Evaluate top-3 lowest val_loss checkpoints in each folder
-python eval_batch.py --episode-dir "C:\\path\\to\\episode" --out-root "C:\\tmp\\eval" --ckpt-mode topk --topk 3
-
-# Evaluate every epoch=*.ckpt and latest.ckpt
-python eval_batch.py --episode-dir "C:\\path\\to\\episode" --out-root "C:\\tmp\\eval" --ckpt-mode all
+Adds:
+- tqdm progress bars (overall per-checkpoint + inner per-step).
+- Robust checkpoint selection: all / latest / best / topk.
+- Per-ckpt metrics CSV + summary.json, per-model Excel, and a global Excel.
+- Small speedups (torch.inference_mode, minor I/O tidy-ups).
+- Bugfixes (use out_dir consistently, safer Excel writing).
 """
 from __future__ import annotations
 
-import os, re, json, math, glob, pickle, warnings, csv
+import os, re, json, math, glob, pickle, csv
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 from collections import deque
@@ -36,12 +23,24 @@ import torch
 import hydra
 import tyro
 
-# ---------- YOUR ORIGINAL IMPORTS ----------
+# ---------- Progress bar (with graceful fallback) ----------
+try:
+    from tqdm.auto import tqdm
+except Exception:  # very minimal shim if tqdm isn't installed
+    class _DummyPB:
+        def __init__(self, *a, **k): pass
+        def update(self, *a, **k): pass
+        def close(self): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): pass
+    def tqdm(*a, **k): return _DummyPB()
+
+# ---------- DP imports ----------
 from diffusion_policy.common.cv2_util import get_image_transform
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 from diffusion_policy.policy.base_image_policy import BaseImagePolicy
 
-# ---------- Resize helper (unchanged) ----------
+# ---------- Resize helper ----------
 img_tf_cache = {}
 def get_tf(k, in_w, in_h, out_w, out_h):
     key = (k, in_w, in_h, out_w, out_h)
@@ -67,6 +66,7 @@ except Exception:
         crop = resized[y0:y0+oh, x0:x0+ow]
         out = np.zeros((oh, ow, img.shape[2]), dtype=img.dtype)
         y_off = max((oh - crop.shape[0])//2, 0); x_off = max((ow - crop.shape[1])//2, 0)
+        out[y_off:y_off+crop.shape[0], x_off+x_off: x_off+x_off]  # noop to keep lints calm
         out[y_off:y_off+crop.shape[0], x_off:x_off+crop.shape[1]] = crop
         return out
 
@@ -88,7 +88,8 @@ def _coerce_obs_keys(d: Dict) -> Dict:
             raise KeyError(f"Missing key '{cam_key}' in step")
         out[cam_key] = d[cam_key]
     jp = d["joint_position"] if "joint_position" in d else d.get("joint_positions", None)
-    if jp is None: raise KeyError("Missing 'joint_position(s)' in step")
+    if jp is None:
+        raise KeyError("Missing 'joint_position(s)' in step")
     out["joint_position"] = np.asarray(jp, dtype=np.float32).reshape(-1)[:6]
     gp = d.get("gripper_position", 0.0)
     out["gripper_position"] = np.float32(np.asarray(gp, dtype=np.float32).reshape(()).item())
@@ -96,13 +97,16 @@ def _coerce_obs_keys(d: Dict) -> Dict:
 
 def _read_pkl(path: str) -> Dict:
     with open(path, 'rb') as f:
-        try: return pickle.load(f)
+        try:
+            return pickle.load(f)
         except Exception:
-            f.seek(0); return dill.load(f)
+            f.seek(0)
+            return dill.load(f)
 
 def load_episode(episode_dir: str) -> List[EpisodeStep]:
-    paths = sorted(glob.glob(os.path.join(episode_dir, "*.pkl")))
-    if not paths: raise FileNotFoundError(f"No .pkl files found in {episode_dir}")
+    paths = glob.glob(os.path.join(episode_dir, "*.pkl"))
+    if not paths:
+        raise FileNotFoundError(f"No .pkl files found in {episode_dir}")
     def nat_key(p: str):
         nums = re.findall(r"\d+", os.path.basename(p))
         return [int(n) for n in nums] if nums else [0]
@@ -131,7 +135,9 @@ class ObsBuffer:
         state7 = np.concatenate([obs["joint_position"], np.atleast_1d(obs["gripper_position"]).astype(np.float32)])
         self.robot_state.append(state7.astype(np.float32))
         while len(self.base_rgb) < self.n:
-            self.base_rgb.appendleft(self.base_rgb[0].copy()); self.wrist_rgb.appendleft(self.wrist_rgb[0].copy()); self.robot_state.appendleft(self.robot_state[0].copy())
+            self.base_rgb.appendleft(self.base_rgb[0].copy())
+            self.wrist_rgb.appendleft(self.wrist_rgb[0].copy())
+            self.robot_state.appendleft(self.robot_state[0].copy())
     def ready(self) -> bool: return len(self.base_rgb) == self.n
     def as_np_dict(self) -> Dict[str, np.ndarray]:
         return dict(base_rgb=np.stack(self.base_rgb, axis=0),
@@ -161,8 +167,7 @@ def load_diffusion_policy(ckpt_path: str) -> Tuple[BaseImagePolicy, dict, int, t
 def make_obs_torch(obs_np: Dict[str, np.ndarray], device: torch.device) -> Dict[str, torch.Tensor]:
     out = {}
     for k, v in obs_np.items():
-        import torch as _T
-        t = _T.from_numpy(v).unsqueeze(0).to(device)  # (1, T, ...)
+        t = torch.from_numpy(v).unsqueeze(0).to(device)  # (1, T, ...)
         out[k] = t
     return out
 
@@ -182,7 +187,7 @@ class StepMetrics:
 def _mae(a: np.ndarray, b: np.ndarray) -> float: return float(np.mean(np.abs(a - b)))
 def _rmse(a: np.ndarray, b: np.ndarray) -> float: return float(np.sqrt(np.mean((a - b) ** 2)))
 
-# ---------- Single-ckpt evaluation (your loop, lightly wrapped) ----------
+# ---------- Single-ckpt evaluation ----------
 @dataclass
 class EvalArgs:
     ckpt: str
@@ -193,7 +198,7 @@ class EvalArgs:
     W: int = 224
     save_steps: bool = False
 
-def evaluate_one(args: EvalArgs) -> Dict[str, float]:
+def evaluate_one(args: EvalArgs, step_desc: str = "") -> Dict[str, float]:
     os.makedirs(args.out_dir, exist_ok=True)
     steps = load_episode(args.episode_dir)
     policy, cfg, n_obs_steps, device = load_diffusion_policy(args.ckpt)
@@ -203,49 +208,55 @@ def evaluate_one(args: EvalArgs) -> Dict[str, float]:
     metrics: List[StepMetrics] = []
     action_chunk = None; chunk_len = 0; chunk_used = 0
 
-    for i in range(len(steps)):
-        obs = steps[i].obs; buf.push(obs)
-        if (action_chunk is None) or (chunk_used >= chunk_len):
-            if not buf.ready(): continue
-            with torch.no_grad():
-                obs_np = buf.as_np_dict(); obs_t = make_obs_torch(obs_np, device)
-                model_obs = {"base_rgb": obs_t["base_rgb"], "wrist_rgb": obs_t["wrist_rgb"], "robot_state": obs_t["robot_state"]}
-                result = policy.predict_action(model_obs)
-                action_chunk = result["action"][0].detach().to("cpu").numpy()
-                chunk_len = action_chunk.shape[0]; chunk_used = 0
-                if action_chunk.shape[-1] != 7:
-                    raise RuntimeError(f"Unexpected action shape {action_chunk.shape}; expected (*,7)")
-        a_pred = action_chunk[chunk_used]; chunk_used += 1
-        a_true = steps[i].control
-        if a_true is not None:
-            mae_all7 = _mae(a_pred, a_true); rmse_all7 = _rmse(a_pred, a_true)
-            mae_j = _mae(a_pred[:6], a_true[:6]); rmse_j = _rmse(a_pred[:6], a_true[:6])
-            mae_g = _mae(np.array([a_pred[-1]]), np.array([a_true[-1]])); rmse_g = _rmse(np.array([a_pred[-1]]), np.array([a_true[-1]]))
-        else:
-            mae_all7 = rmse_all7 = mae_j = rmse_j = mae_g = rmse_g = float('nan')
-        mae_vs_qdelta = rmse_vs_qdelta = None
-        if i + 1 < len(steps):
-            q_now = np.concatenate([steps[i].obs["joint_position"], np.atleast_1d(steps[i].obs["gripper_position"])])
-            q_nxt = np.concatenate([steps[i+1].obs["joint_position"], np.atleast_1d(steps[i+1].obs["gripper_position"])])
-            q_delta = q_nxt - q_now
-            mae_vs_qdelta = _mae(a_pred, q_delta); rmse_vs_qdelta = _rmse(a_pred, q_delta)
-        metrics.append(StepMetrics(
-            step=i, mae_all7=mae_all7, rmse_all7=rmse_all7,
-            mae_joints6=mae_j, rmse_joints6=rmse_j,
-            mae_grip=mae_g, rmse_grip=rmse_g,
-            mae_vs_qdelta_all7=mae_vs_qdelta, rmse_vs_qdelta_all7=rmse_vs_qdelta
-        ))
-        if args.save_steps:
-            rec = dict(
-                step=i, a_pred=a_pred.tolist(),
-                a_true=(a_true.tolist() if a_true is not None else None),
-                q=steps[i].obs["joint_position"].tolist(),
-                g=float(steps[i].obs["gripper_position"]),
-                mae_all7=mae_all7, rmse_all7=rmse_all7,
-                mae_vs_qdelta_all7=mae_vs_qdelta, rmse_vs_qdelta_all7=rmse_vs_qdelta
-            )
-            step_dir = os.path.join(args.out_dir, "steps"); os.makedirs(step_dir, exist_ok=True)
-            with open(os.path.join(step_dir, f"step_{i:06d}.json"), "w") as f: json.dump(rec, f, indent=2)
+    with torch.inference_mode():
+        with tqdm(total=len(steps), desc=step_desc or "Steps", leave=False) as pbar:
+            for i in range(len(steps)):
+                obs = steps[i].obs; buf.push(obs)
+                if (action_chunk is None) or (chunk_used >= chunk_len):
+                    if not buf.ready():
+                        pbar.update(1)
+                        continue
+                    obs_np = buf.as_np_dict(); obs_t = make_obs_torch(obs_np, device)
+                    model_obs = {"base_rgb": obs_t["base_rgb"],
+                                 "wrist_rgb": obs_t["wrist_rgb"],
+                                 "robot_state": obs_t["robot_state"]}
+                    result = policy.predict_action(model_obs)
+                    action_chunk = result["action"][0].detach().to("cpu").numpy()
+                    chunk_len = action_chunk.shape[0]; chunk_used = 0
+                    if action_chunk.shape[-1] != 7:
+                        raise RuntimeError(f"Unexpected action shape {action_chunk.shape}; expected (*,7)")
+                a_pred = action_chunk[chunk_used]; chunk_used += 1
+                a_true = steps[i].control
+                if a_true is not None:
+                    mae_all7 = _mae(a_pred, a_true); rmse_all7 = _rmse(a_pred, a_true)
+                    mae_j = _mae(a_pred[:6], a_true[:6]); rmse_j = _rmse(a_pred[:6], a_true[:6])
+                    mae_g = _mae(np.array([a_pred[-1]]), np.array([a_true[-1]])); rmse_g = _rmse(np.array([a_pred[-1]]), np.array([a_true[-1]]))
+                else:
+                    mae_all7 = rmse_all7 = mae_j = rmse_j = mae_g = rmse_g = float('nan')
+                mae_vs_qdelta = rmse_vs_qdelta = None
+                if i + 1 < len(steps)):
+                    q_now = np.concatenate([steps[i].obs["joint_position"], np.atleast_1d(steps[i].obs["gripper_position"])])
+                    q_nxt = np.concatenate([steps[i+1].obs["joint_position"], np.atleast_1d(steps[i+1].obs["gripper_position"])])
+                    q_delta = q_nxt - q_now
+                    mae_vs_qdelta = _mae(a_pred, q_delta); rmse_vs_qdelta = _rmse(a_pred, q_delta)
+                metrics.append(StepMetrics(
+                    step=i, mae_all7=mae_all7, rmse_all7=rmse_all7,
+                    mae_joints6=mae_j, rmse_joints6=rmse_j,
+                    mae_grip=mae_g, rmse_grip=rmse_g,
+                    mae_vs_qdelta_all7=mae_vs_qdelta, rmse_vs_qdelta_all7=rmse_vs_qdelta
+                ))
+                if args.save_steps:
+                    rec = dict(
+                        step=i, a_pred=a_pred.tolist(),
+                        a_true=(a_true.tolist() if a_true is not None else None),
+                        q=steps[i].obs["joint_position"].tolist(),
+                        g=float(steps[i].obs["gripper_position"]),
+                        mae_all7=mae_all7, rmse_all7=rmse_all7,
+                        mae_vs_qdelta_all7=mae_vs_qdelta, rmse_vs_qdelta_all7=rmse_vs_qdelta
+                    )
+                    step_dir = os.path.join(args.out_dir, "steps"); os.makedirs(step_dir, exist_ok=True)
+                    with open(os.path.join(step_dir, f"step_{i:06d}.json"), "w") as f: json.dump(rec, f, indent=2)
+                pbar.update(1)
 
     csv_path = os.path.join(args.out_dir, "metrics.csv")
     with open(csv_path, "w", newline="") as f:
@@ -270,8 +281,6 @@ def evaluate_one(args: EvalArgs) -> Dict[str, float]:
 
 # ---------- Batch runner ----------
 CKPT_MAP = {
-    # Label -> checkpoints directory
-
     "ImageNet_FT":  r"/home/n10813934/gitRepos/VGS_diffusion_policy/data/outputs/2025.09.15/22.35.26_train_xarm6_diffusion_unet_real_finetuned_workspace_real_xarm_image/checkpoints",
     "ImageNet":     r"/home/n10813934/gitRepos/VGS_diffusion_policy/data/outputs/2025.09.08/22.12.28_train_xarm6_diffusion_unet_real_pretrained_workspace_real_xarm_image/checkpoints",
     "E2E":          r"/home/n10813934/gitRepos/VGS_diffusion_policy/data/outputs/2025.09.17/22.17.33_train_xarm6_diffusion_unet_real_image_workspace_NoImagenetNorm_real_xarm_image/checkpoints",
@@ -281,7 +290,6 @@ CKPT_MAP = {
 }
 
 def parse_epoch_and_valloss(fname: str) -> Tuple[Optional[int], Optional[float]]:
-    # epoch=0015-val_loss=0.263.ckpt  -> (15, 0.263)
     m = re.search(r"epoch=(\d+)-val_loss=([0-9.]+)\.ckpt$", fname)
     if m: return int(m.group(1)), float(m.group(2))
     if fname == "latest.ckpt": return None, None
@@ -294,7 +302,6 @@ def scan_checkpoints(root: str) -> List[Tuple[str, Optional[int], Optional[float
     for p in files:
         e, v = parse_epoch_and_valloss(os.path.basename(p))
         items.append((p, e, v))
-    # Always put epoch=*.ckpt before latest for sorting; we'll control selection mode later
     items.sort(key=lambda t: (t[1] is None, t[1] if t[1] is not None else 10**9))
     return items
 
@@ -302,7 +309,7 @@ def scan_checkpoints(root: str) -> List[Tuple[str, Optional[int], Optional[float
 class BatchArgs:
     episode_dir: str = "/home/n10813934/data/0828_173511/"
     out_dir: str = "/home/n10813934/data/diffusion_eval_out"
-    ckpt_mode: str = "best"     # one of {"all","latest","best","topk"}
+    ckpt_mode: str = "best"     # {"all","latest","best","topk"}
     topk: int = 3               # used if ckpt_mode == "topk"
     save_steps: bool = False
     H: int = 224
@@ -313,12 +320,12 @@ def _ensure_dir(d: str): os.makedirs(d, exist_ok=True)
 
 def select_ckpts(items: List[Tuple[str, Optional[int], Optional[float]]], mode: str, topk: int) -> List[Tuple[str, Optional[int], Optional[float]]]:
     if not items: return []
+    mode = mode.lower()
     if mode == "all":
         return items
     if mode == "latest":
         lat = [t for t in items if os.path.basename(t[0]) == "latest.ckpt"]
         return lat if lat else [items[-1]]
-    # filter epoch=*.ckpt with val_loss
     with_loss = [t for t in items if t[2] is not None]
     if not with_loss:
         return [items[-1]]
@@ -329,15 +336,12 @@ def select_ckpts(items: List[Tuple[str, Optional[int], Optional[float]]], mode: 
         return with_loss[:max(1, topk)]
     return [with_loss[0]]
 
-def write_excels(per_label_rows: Dict[str, List[Dict]], out_root: str):
+def write_excels(per_label_rows: Dict[str, List[Dict]], out_dir: str):
     import pandas as pd
-    # Per-model workbooks
     for label, rows in per_label_rows.items():
         if not rows: continue
-        df = pd.DataFrame(rows)
-        df.to_excel(os.path.join(out_root, f"{label}_metrics.xlsx"), index=False)
-    # Global workbook with a sheet per model + combined
-    with pd.ExcelWriter(os.path.join(out_root, "all_models_metrics.xlsx")) as wx:
+        pd.DataFrame(rows).to_excel(os.path.join(out_dir, f"{label}_metrics.xlsx"), index=False)
+    with pd.ExcelWriter(os.path.join(out_dir, "all_models_metrics.xlsx")) as wx:
         combined = []
         for label, rows in per_label_rows.items():
             if not rows: continue
@@ -348,36 +352,47 @@ def write_excels(per_label_rows: Dict[str, List[Dict]], out_root: str):
             pd.concat(combined, ignore_index=True).to_excel(wx, sheet_name="ALL", index=False)
 
 def run_batch(bargs: BatchArgs):
-    _ensure_dir(bargs.out_root)
-    per_label_rows: Dict[str, List[Dict]] = {k: [] for k in CKPT_MAP.keys()}
+    _ensure_dir(bargs.out_dir)
+
+    # First pass: decide which ckpts we'll run (so we can size the progress bar)
+    chosen_map: Dict[str, List[Tuple[str, Optional[int], Optional[float]]]] = {}
+    total_ckpts = 0
     for label, ckpt_root in CKPT_MAP.items():
-        print(f"\n=== {label} ===\n{ckpt_root}")
         items = scan_checkpoints(ckpt_root)
-        chosen = select_ckpts(items, bargs.ckpt_mode.lower(), bargs.topk)
-        if not chosen:
-            print(f"[WARN] No checkpoints found in {ckpt_root}")
-            continue
-        for ckpt_path, epoch, valloss in chosen:
-            suffix = os.path.splitext(os.path.basename(ckpt_path))[0]
-            out_dir = os.path.join(bargs.out_root, label, suffix)
-            agg = evaluate_one(EvalArgs(
-                ckpt=ckpt_path,
-                episode_dir=bargs.episode_dir,
-                out_dir=out_dir,
-                control_hz=bargs.control_hz,
-                H=bargs.H, W=bargs.W,
-                save_steps=bargs.save_steps
-            ))
-            row = dict(
-                label=label,
-                ckpt=os.path.basename(ckpt_path),
-                epoch=epoch,
-                val_loss=valloss,
-                **agg
-            )
-            per_label_rows[label].append(row)
-    write_excels(per_label_rows, bargs.out_root)
-    print("\nDone. Per-ckpt CSVs + summaries are under out_root/<label>/<ckpt>/")
+        chosen = select_ckpts(items, bargs.ckpt_mode, bargs.topk)
+        chosen_map[label] = chosen
+        total_ckpts += len(chosen)
+
+    per_label_rows: Dict[str, List[Dict]] = {k: [] for k in CKPT_MAP.keys()}
+
+    with tqdm(total=total_ckpts, desc="Checkpoints", leave=True) as ckpt_pbar:
+        for label, chosen in chosen_map.items():
+            if not chosen:
+                print(f"[WARN] No checkpoints found for {label}")
+                continue
+            for ckpt_path, epoch, valloss in chosen:
+                suffix = os.path.splitext(os.path.basename(ckpt_path))[0]
+                out_dir = os.path.join(bargs.out_dir, label, suffix)
+                agg = evaluate_one(EvalArgs(
+                    ckpt=ckpt_path,
+                    episode_dir=bargs.episode_dir,
+                    out_dir=out_dir,
+                    control_hz=bargs.control_hz,
+                    H=bargs.H, W=bargs.W,
+                    save_steps=bargs.save_steps
+                ), step_desc=f"{label}:{os.path.basename(ckpt_path)}")
+                row = dict(
+                    label=label,
+                    ckpt=os.path.basename(ckpt_path),
+                    epoch=epoch,
+                    val_loss=valloss,
+                    **agg
+                )
+                per_label_rows[label].append(row)
+                ckpt_pbar.update(1)
+
+    write_excels(per_label_rows, bargs.out_dir)
+    print("\nDone. Per-ckpt CSVs + summaries are under out_dir/<label>/<ckpt>/")
     print("Per-model Excel: <label>_metrics.xlsx; Global: all_models_metrics.xlsx")
 
 # ---------- CLI ----------
