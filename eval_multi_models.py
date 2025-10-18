@@ -300,8 +300,8 @@ def scan_checkpoints(root: str) -> List[Tuple[str, Optional[int], Optional[float
 
 @dataclass
 class BatchArgs:
-    episode_dir: str
-    out_root: str
+    episode_dir: str = "/home/n10813934/data/0828_173511/"
+    out_dir: str = "/home/n10813934/data/diffusion_eval_out"
     ckpt_mode: str = "best"     # one of {"all","latest","best","topk"}
     topk: int = 3               # used if ckpt_mode == "topk"
     save_steps: bool = False
