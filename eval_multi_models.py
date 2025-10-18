@@ -224,7 +224,7 @@ def evaluate_one(args: EvalArgs) -> Dict[str, float]:
         else:
             mae_all7 = rmse_all7 = mae_j = rmse_j = mae_g = rmse_g = float('nan')
         mae_vs_qdelta = rmse_vs_qdelta = None
-        if i + 1 < len(steps)):
+        if i + 1 < len(steps):
             q_now = np.concatenate([steps[i].obs["joint_position"], np.atleast_1d(steps[i].obs["gripper_position"])])
             q_nxt = np.concatenate([steps[i+1].obs["joint_position"], np.atleast_1d(steps[i+1].obs["gripper_position"])])
             q_delta = q_nxt - q_now
